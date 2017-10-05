@@ -12,6 +12,10 @@ You will need [Leiningen][1] 2.0 or above installed.
 
 ## Running
 
+You need mysql/mariadb. Update profiles.clj with your information. To create the tables, run
+
+    lein run migrate
+
 To start a web server for the application, run:
 
     lein run 
