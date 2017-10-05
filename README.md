@@ -2,7 +2,7 @@
 
 generated using Luminus version "2.9.11.91"
 
-FIXME
+Cassandra works like this, i.e. the latest value per column wins. Also works for maps.
 
 ## Prerequisites
 
@@ -18,4 +18,4 @@ To start a web server for the application, run:
 
 ## License
 
-Copyright © 2017 FIXME
+Copyright © 2017 Mattias W
