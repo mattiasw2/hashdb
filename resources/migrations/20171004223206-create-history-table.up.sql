@@ -1,0 +1,13 @@
+CREATE TABLE `history`
+(`id` VARCHAR(20) NOT NULL,
+ `before` VARCHAR(10000) NOT NULL,
+ `after` VARCHAR(10000) NOT NULL,
+ `updated` TIMESTAMP NOT NULL,
+-- `parent` TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:01',
+ `parent` TIMESTAMP NULL DEFAULT NULL,
+ `is_merge` BOOLEAN NOT NULL,
+ `userid` VARCHAR(20) NULL,
+ `sessionid` VARCHAR(20) NULL,
+ `comment` VARCHAR(1000) NULL
+--  PRIMARY KEY (`id`,`updated`)
+  );

@@ -1,0 +1,6 @@
+CREATE TABLE `hashdb_dev`.`latest` (
+  `id` VARCHAR(20) NOT NULL,
+  `data` VARCHAR(10000) NOT NULL,
+  `updated` TIMESTAMP NULL DEFAULT NULL,
+  `parent` TIMESTAMP NULL DEFAULT NULL,
+  PRIMARY KEY (`id`));
