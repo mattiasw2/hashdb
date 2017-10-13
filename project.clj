@@ -29,6 +29,11 @@
                  [ring-webjars "0.2.0"]
                  [ring/ring-core "1.6.2"]
                  [ring/ring-defaults "0.3.1"]
+
+                 ;; helper to get :req and similar får clojure spec:s
+                 ;; https://github.com/lab-79/clojure-spec-helpers/blob/master/test/clojure_spec_helpers/core_test.clj
+                 ;; not sure there is a clojar
+                 [lab79/clojure-spec-helpers "1.1.1"]
                  [selmer "1.11.1"]]
 
   :min-lein-version "2.0.0"
@@ -52,7 +57,7 @@
    :nrepl-port 7002
    :css-dirs ["resources/public/css"]
    :nrepl-middleware [cemerick.piggieback/wrap-cljs-repl]}
-  
+
 
   :profiles
   {:uberjar {:omit-source true
@@ -67,8 +72,8 @@
                  :pretty-print false
                  :closure-warnings
                  {:externs-validation :off :non-standard-jsdoc :off}}}}}
-             
-             
+
+
              :aot :all
              :uberjar-name "hashdb.jar"
              :source-paths ["env/prod/clj"]
@@ -102,9 +107,9 @@
                       :source-map true
                       :optimizations :none
                       :pretty-print true}}}}
-                  
-                  
-                  
+
+
+
                   :doo {:build "test"}
                   :source-paths ["env/dev/clj"]
                   :resource-paths ["env/dev/resources"]
@@ -120,8 +125,8 @@
                      {:output-to "target/test.js"
                       :main "hashdb.doo-runner"
                       :optimizations :whitespace
-                      :pretty-print true}}}}
-                  
-                  }
+                      :pretty-print true}}}}}
+
+
    :profiles/dev {}
    :profiles/test {}})

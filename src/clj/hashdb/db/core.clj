@@ -2,6 +2,7 @@
   (:require
     [clj-time.jdbc]
     [clojure.java.jdbc :as jdbc]
+    [clojure.java.jdbc :as sql]
     [conman.core :as conman]
     [hashdb.config :refer [env]]
     [mount.core :refer [defstate]])
@@ -14,5 +15,3 @@
            :stop (conman/disconnect! *db*))
 
 (conman/bind-connection *db* "sql/queries.sql")
-
-
