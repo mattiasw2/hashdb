@@ -26,3 +26,16 @@ SELECT id, version, data FROM latest
 -- :doc delete a latest given the id
 DELETE FROM latest
 WHERE id = :id
+
+
+-- :name create-history! :! :n
+-- :doc creates a new history record
+INSERT INTO history
+(id, `deleted`, `before`, `after`, updated, version, parent, is_merge, userid, sessionid, comment)
+VALUES (:id, :deleted, :before, :after, :updated, :version, :parent, :is_merge, :userid, :sessionid, :comment)
+
+
+-- :name select-history :? :*
+-- :doc retrieve all history rows for a latest entry
+SELECT * FROM history
+WHERE ID = :id

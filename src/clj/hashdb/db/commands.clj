@@ -31,8 +31,12 @@
   (let [id0 (or (:id m) (uuid))
         now0 (now)
         version 1
-        m (into m {:id id0 :updated now0 :version version})]
-    (cmd/create-latest! {:id id0 :data (pr-str m) :updated (now) :parent 0 :version version})
+        m (into m {:id id0 :updated now0 :version version})
+        data (pr-str m)]
+    (cmd/create-latest! {:id id0 :data data :updated now0 :parent 0 :version version})
+    (cmd/create-history! {:id id0, :deleted 0, :before "{}", :after data,
+                          :updated now0, :version version, :parent 0, :is_merge 0,
+                          :userid nil, :sessionid nil, :comment nil})
     m))
 
 (defn verify-row-in-sync
@@ -80,14 +84,63 @@
    Return the new map, or throw exception if update fails."
   [m changes]
   (assert (nil? (:id changes)) "Changing :id is not allowed!")
+  (assert (and (some? (:version m))(>= (:version m) 1)) "Version 0 should be create:d!")
   (let [id (nn (:id m))
         parent (nn (:version m))
         version (inc parent)
         updated (now)
-        data (pr-str (into (into m changes) {:updated updated :version version}))
-        affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data})]
-    (cond (= 1 affected) data
-          (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
+        before (select-keys m (keys changes))
+        data (into (into m changes) {:updated updated :version version})
+        data-str (pr-str data)
+        affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data-str})]
+    (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
                                          {:id id :updated parent}))
           (> affected 1) (throw (ex-info (str "Row " id " existed several times in db.")
-                                         {:id id :updated parent})))))
+                                         {:id id :updated parent})))
+
+    ;; why not in a transaction? since insert, it cannot fail.
+    (cmd/create-history! {:id id, :deleted 0, :before (pr-str before), :after (pr-str changes),
+                          :updated updated, :version version, :parent parent, :is_merge 0,
+                          :userid nil, :sessionid nil, :comment nil})
+
+    data))
+
+(defn delete
+  "Delete the row for `m`.
+   We do not care if anyone has updated or deleted the row just before.
+   Will leave a perfect history."
+  [m]
+  (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
+  (let [affected (cmd/delete-latest! m)]
+    (cmd/create-history! {:id (:id m), :deleted 1, :before (pr-str m), :after "{}",
+                          :updated (now), :version (inc (:version m)), :parent (:version m),
+                          :is_merge 0,
+                          :userid nil, :sessionid nil, :comment nil})))
+
+(defn delete-by-id-with-minimum-history
+  "Delete the row `id`.
+   The last history entry will not be optimal.
+   Workaround, read the record first, use delete-by-id.
+   We do not care if anyone has updated or deleted the row just before."
+  [id]
+  (let [affected (cmd/delete-latest! {:id id})]
+    (cmd/create-history! {:id id, :deleted 1, :before "{}", :after "{}",
+                          :updated (now), :version 2000000001, :parent 2000000000,
+                          :is_merge 0,
+                          :userid nil, :sessionid nil, :comment nil})
+    nil))
+
+(defn delete-by-id
+  "Delete the row `id`.
+   Make sure history is perfect by reading the record first.
+   We do not care if anyone has updated or deleted the row just before."
+  [id]
+  (if-let [m (try-get id)]
+    (let [affected (cmd/delete-latest! {:id (:id m)})
+          version (:version m)]
+      (when (> affected 0)
+        (cmd/create-history! {:id (:id m), :deleted 1, :before (pr-str m), :after "{}",
+                              :updated (now), :version (inc version), :parent version,
+                              :is_merge 0,
+                              :userid nil, :sessionid nil, :comment nil}))
+      nil)))
