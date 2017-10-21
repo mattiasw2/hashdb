@@ -18,8 +18,9 @@
                  [metosin/ring-http-response "0.9.0"]
                  [mount "0.1.11"]
                  [mysql/mysql-connector-java "6.0.5"]
+                 ;; [org.clojure/clojure "1.9.0-beta2"]
                  [org.clojure/clojure "1.8.0"]
-                 [org.clojure/clojurescript "1.9.908" :scope "provided"]
+                 [org.clojure/clojurescript "1.9.946"] ;; :scope "provided"
                  [org.clojure/java.jdbc "0.7.1"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/tools.logging "0.4.0"]

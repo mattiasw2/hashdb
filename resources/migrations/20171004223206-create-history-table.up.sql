@@ -1,13 +1,16 @@
 CREATE TABLE `history`
-(`id` VARCHAR(20) NOT NULL,
+(`id` VARCHAR(36) NOT NULL,
+-- before {} after first insert
  `before` VARCHAR(10000) NOT NULL,
  `after` VARCHAR(10000) NOT NULL,
- `updated` TIMESTAMP NOT NULL,
+-- without DEFAULT CURRENT_TIMESTAMP will mysql update it on every update
+--  DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+ `updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 -- `parent` TIMESTAMP NOT NULL DEFAULT '1970-01-01 00:00:01',
  `parent` TIMESTAMP NULL DEFAULT NULL,
  `is_merge` BOOLEAN NOT NULL,
- `userid` VARCHAR(20) NULL,
- `sessionid` VARCHAR(20) NULL,
+ `userid` VARCHAR(36) NULL,
+ `sessionid` VARCHAR(36) NULL,
  `comment` VARCHAR(1000) NULL
 --  PRIMARY KEY (`id`,`updated`)
   );
