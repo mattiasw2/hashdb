@@ -36,33 +36,39 @@
     m))
 
 (defn verify-row-in-sync
-  [m]
-  (assert (and (= (:id m)(:id (:data m)))
-               (= (:version m)(:version (:data m))))
+  [row m]
+  (assert (and (= (:id row)(:id m))
+               (= (:version row)(:version m)))
           "id and/or version and data columns in table latest are not in sync.")
   m)
+
+(defn- try-get-internal
+  "Return map at `id`, null if not found."
+  [id row]
+  (let [row (cmd/get-latest {:id id})
+        m (clojure.edn/read-string (:data row))]
+    (when row (assert (and (= id (:id row)))
+                    "id and/or version and data columns in table latest are not in sync."))
+    (when m (verify-row-in-sync row m))
+    m))
 
 (defn try-get
   "Return map at `id`, null if not found."
   [id]
-  (let [m (cmd/get-latest {:id id})
-        res (clojure.edn/read-string (:data m))]
-    (when m (assert (and (= id (:id m)))
-                    "id and/or version and data columns in table latest are not in sync."))
-    (when res (verify-row-in-sync res))
-    res))
+  (try-get-internal id (cmd/get-latest {:id id})))
+
 
 (defn get
   "Return map at `id`, exception if not found."
   [id]
   (let [m (try-get id)]
-    (if m m (throw (ex-info (str "Record with id " id " missing!")
+    (if m m (throw (ex-info (str "Row with id " id " missing!")
                             {:id id})))))
 
 (defn select-all
-  "Return all maps."
+  "Return all rows."
   []
-  (map #(clojure.edn/read-string (:data (verify-row-in-sync %)))
+  (map #(try-get-internal (:id %) %)
        (cmd/select-all-latest)))
 
 (defn update
@@ -77,7 +83,7 @@
         data (pr-str (into (into m changes) {:updated updated :version version}))
         affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data})]
     (cond (= 1 affected) data
-          (= 0 affected) (throw (ex-info (str "Record " id " has been updated since read " parent)
+          (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
                                          {:id id :updated parent}))
-          (> affected 1) (throw (ex-info (str "Record " id " existed several times in db.")
+          (> affected 1) (throw (ex-info (str "Row " id " existed several times in db.")
                                          {:id id :updated parent})))))

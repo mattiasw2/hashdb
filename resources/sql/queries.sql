@@ -14,7 +14,7 @@ WHERE id = :id and version = :parent
 
 -- :name get-latest :? :1
 -- :doc retrieve a latest given the id.
-SELECT * FROM latest
+SELECT id, version, data FROM latest
 WHERE id = :id
 
 -- :name select-all-latest :? :*
