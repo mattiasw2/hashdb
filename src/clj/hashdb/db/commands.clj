@@ -30,17 +30,27 @@
   [m]
   (let [id0 (or (:id m) (uuid))
         now0 (now)
-        updated-sql (java.sql.Timestamp. (.getTime now0))
-        m (into m {:id id0 :updated now0})]
-    (cmd/create-latest! {:id id0 :data (pr-str m) :updated updated-sql :parent nil})
+        version 1
+        m (into m {:id id0 :updated now0 :version version})]
+    (cmd/create-latest! {:id id0 :data (pr-str m) :updated (now) :parent 0 :version version})
     m))
+
+(defn verify-row-in-sync
+  [m]
+  (assert (and (= (:id m)(:id (:data m)))
+               (= (:version m)(:version (:data m))))
+          "id and/or version and data columns in table latest are not in sync.")
+  m)
 
 (defn try-get
   "Return map at `id`, null if not found."
   [id]
-  (let [m (cmd/get-latest {:id id})]
-    (when m (assert (= id (:id m)) "id and data columns in table latest are not in sync w.r.t. :id."))
-    (clojure.edn/read-string (:data m))))
+  (let [m (cmd/get-latest {:id id})
+        res (clojure.edn/read-string (:data m))]
+    (when m (assert (and (= id (:id m)))
+                    "id and/or version and data columns in table latest are not in sync."))
+    (when res (verify-row-in-sync res))
+    res))
 
 (defn get
   "Return map at `id`, exception if not found."
@@ -52,7 +62,7 @@
 (defn select-all
   "Return all maps."
   []
-  (map #(clojure.edn/read-string (:data %))
+  (map #(clojure.edn/read-string (:data (verify-row-in-sync %)))
        (cmd/select-all-latest)))
 
 (defn update
@@ -61,12 +71,11 @@
    Return the new map, or throw exception if update fails."
   [m changes]
   (let [id (nn (:id m))
-        parent (nn (:updated m))
+        parent (nn (:version m))
+        version (inc parent)
         updated (now)
-        data (pr-str (into (into m changes) {:updated updated :parent parent}))
-        updated-sql (java.sql.Timestamp. (.getTime updated))
-        parent-sql (java.sql.Timestamp. (.getTime parent))
-        affected (cmd/update-latest! {:id id :parent parent-sql :updated updated-sql :data data})]
+        data (pr-str (into (into m changes) {:updated updated :version version}))
+        affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data})]
     (cond (= 1 affected) data
           (= 0 affected) (throw (ex-info (str "Record " id " has been updated since read " parent)
                                          {:id id :updated parent}))

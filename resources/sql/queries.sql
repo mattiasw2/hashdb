@@ -1,14 +1,14 @@
 -- :name create-latest! :! :n
 -- :doc creates a new latest record
 INSERT INTO latest
-(id, data, updated, parent)
-VALUES (:id, :data, :updated, :parent)
+(id, data, updated, version, parent)
+VALUES (:id, :data, :updated, :version, :parent)
 
 -- :name update-latest! :! :n
 -- :doc update an existing latest record
 UPDATE latest
-SET id = :id, data = :data, updated = :updated, parent = :parent
-WHERE id = :id and updated = :parent
+SET id = :id, data = :data, updated = :updated, parent = :parent, version = :version
+WHERE id = :id and version = :parent
 -- WHERE id = :id
 -- tz problem WHERE id = :id and updated = :parent
 
@@ -19,7 +19,7 @@ WHERE id = :id
 
 -- :name select-all-latest :? :*
 -- :doc retrieve all rows
-SELECT data FROM latest
+SELECT id, version, data FROM latest
 
 
 -- :name delete-latest! :! :n
