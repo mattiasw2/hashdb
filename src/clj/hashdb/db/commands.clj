@@ -36,6 +36,9 @@
     m))
 
 (defn verify-row-in-sync
+  "Make sure db `row` is in sync with `m` from the :data column.
+   Currently, only :id and :version are verified, since if these arr
+   wrong, it is a catastrophic error."
   [row m]
   (assert (and (= (:id row)(:id m))
                (= (:version row)(:version m)))
@@ -76,6 +79,7 @@
    The map `changes` contains the fields that should be updated.
    Return the new map, or throw exception if update fails."
   [m changes]
+  (assert (nil? (:id changes)) "Changing :id is not allowed!")
   (let [id (nn (:id m))
         parent (nn (:version m))
         version (inc parent)
