@@ -158,3 +158,14 @@
   "Get the complete history for `id`."
   [id]
   (map deserialize-history (cmd/select-history {:id id})))
+
+
+;; this operation is most likely much faster since:
+;; 1. no deserialization
+;; 2. InnoDB puts only 767 bytes of a TEXT or BLOB inline, the rest goes into some other block.
+;;    This is a compromise that sometimes helps, sometimes hurts performance.
+(defn history-short
+  "Get the complete history for `id`, but do not read :before and :after.
+   Used to present who changed anything for this object."
+  [id]
+  (cmd/select-history-short {:id id}))
