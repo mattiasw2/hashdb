@@ -13,3 +13,4 @@ profiles.clj
 /*.clj~
 /resources/migrations/*.sql~
 /src/clj/hashdb/db/*.clj~
+/test/clj/hashdb/db/*.clj~

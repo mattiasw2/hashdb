@@ -1,6 +1,9 @@
 (ns user
   (:require [luminus-migrations.core :as migrations]
             [hashdb.config :refer [env]]
+            ;; Added hashdb.db.* so that (start) works
+            hashdb.db.core
+            hashdb.db.commands
             [mount.core :as mount]
             [hashdb.figwheel :refer [start-fw stop-fw cljs]]
             hashdb.core))
@@ -20,5 +23,3 @@
 
 (defn rollback []
   (migrations/migrate ["rollback"] (select-keys env [:database-url])))
-
-
