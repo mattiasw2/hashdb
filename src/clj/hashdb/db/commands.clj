@@ -35,11 +35,12 @@
         data (pr-str m)]
     (cmd/create-latest! {:id id0 :data data :updated now0 :parent 0 :version version})
     (cmd/create-history! {:id id0, :deleted 0, :before "{}", :after data,
-                          :updated now0, :version version, :parent 0, :is_merge 0,
+                          :updated now0, :version version, :parent 0,
+                          :is_merge 0,
                           :userid nil, :sessionid nil, :comment nil})
     m))
 
-(defn verify-row-in-sync
+(defn- verify-row-in-sync
   "Make sure db `row` is in sync with `m` from the :data column.
    Currently, only :id and :version are verified, since if these arr
    wrong, it is a catastrophic error."
@@ -87,6 +88,7 @@
   (assert (and (some? (:version m))(>= (:version m) 1)) "Version 0 should be create:d!")
   (let [id (nn (:id m))
         parent (nn (:version m))
+        ;; for the non-acid update, (inc parent) will not do, maybe I need to using timestamp again
         version (inc parent)
         updated (now)
         before (select-keys m (keys changes))
@@ -99,8 +101,10 @@
                                          {:id id :updated parent})))
 
     ;; why not in a transaction? since insert, it cannot fail.
+    ;; and for non-acid-update, the history is the long-term truth, not the latest entry
     (cmd/create-history! {:id id, :deleted 0, :before (pr-str before), :after (pr-str changes),
-                          :updated updated, :version version, :parent parent, :is_merge 0,
+                          :updated updated, :version version, :parent parent,
+                          :is_merge 0,
                           :userid nil, :sessionid nil, :comment nil})
 
     data))
@@ -138,9 +142,19 @@
   (if-let [m (try-get id)]
     (let [affected (cmd/delete-latest! {:id (:id m)})
           version (:version m)]
-      (when (> affected 0)
-        (cmd/create-history! {:id (:id m), :deleted 1, :before (pr-str m), :after "{}",
-                              :updated (now), :version (inc version), :parent version,
-                              :is_merge 0,
-                              :userid nil, :sessionid nil, :comment nil}))
+      (cmd/create-history! {:id (:id m), :deleted 1, :before (pr-str m), :after "{}",
+                            :updated (now), :version (inc version), :parent version,
+                            :is_merge 0,
+                            :userid nil, :sessionid nil, :comment nil})
       nil)))
+
+(defn- deserialize-history
+  "Deserialize the :before and :after keys of `m`."
+  [m]
+  (into m {:after (clojure.edn/read-string (:after m))
+           :before (clojure.edn/read-string (:before m))}))
+
+(defn history
+  "Get the complete history for `id`."
+  [id]
+  (map deserialize-history (cmd/select-history {:id id})))
