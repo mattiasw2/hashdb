@@ -1,8 +1,8 @@
 -- :name create-latest! :! :n
 -- :doc creates a new latest record
 INSERT INTO latest
-(id, data, updated, version, parent)
-VALUES (:id, :data, :updated, :version, :parent)
+(id, entity, data, updated, version, parent)
+VALUES (:id, :entity, :data, :updated, :version, :parent)
 
 -- :name update-latest! :! :n
 -- :doc update an existing latest record
@@ -14,12 +14,17 @@ WHERE id = :id and version = :parent
 
 -- :name get-latest :? :1
 -- :doc retrieve a latest given the id.
-SELECT id, version, data FROM latest
+SELECT id, entity, version, data FROM latest
 WHERE id = :id
 
 -- :name select-all-latest :? :*
 -- :doc retrieve all rows
-SELECT id, version, data FROM latest
+SELECT id, entity, version, data FROM latest
+
+-- :name select-all-latest-by-entity :? :*
+-- :doc retrieve all rows
+SELECT id, entity, version, data FROM latest
+where entity = :entity
 
 
 -- :name delete-latest! :! :n
@@ -31,8 +36,8 @@ WHERE id = :id
 -- :name create-history! :! :n
 -- :doc creates a new history record
 INSERT INTO history
-(id, `deleted`, `before`, `after`, updated, version, parent, is_merge, userid, sessionid, comment)
-VALUES (:id, :deleted, :before, :after, :updated, :version, :parent, :is_merge, :userid, :sessionid, :comment)
+(id, entity, `deleted`, `before`, `after`, updated, version, parent, is_merge, userid, sessionid, comment)
+VALUES (:id, :entity, :deleted, :before, :after, :updated, :version, :parent, :is_merge, :userid, :sessionid, :comment)
 
 
 -- :name select-history :? :*
@@ -41,7 +46,13 @@ SELECT * FROM history
 WHERE ID = :id
 
 
+-- :name select-history-by-entity :? :*
+-- :doc retrieve all history rows for a latest entry
+SELECT * FROM history
+WHERE entity = :entity
+
+
 -- :name select-history-short :? :*
 -- :doc retrieve all history rows for a latest entry
-SELECT id, `deleted`, updated, version, parent, is_merge, userid, sessionid, comment FROM history
+SELECT id, entity, `deleted`, updated, version, parent, is_merge, userid, sessionid, comment FROM history
 WHERE ID = :id

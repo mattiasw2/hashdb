@@ -18,6 +18,8 @@
 (s/def :ins/id string?)
 (s/def :ins/version int?)
 
+(s/def :ins/first-name (s/and string? #(<= (count %) 20)))
+
 ;; the main of :ins
 (s/def :ins/entity map?)
 
@@ -32,3 +34,13 @@
 
 ;; (= 'keys (first (s/describe (s/get-spec :ins/t))))
 ;; true
+
+
+;; (s/describe (s/get-spec :ins/first-name))
+;; => (and string? (<= (count %) 20))
+
+;; (= 'and (first (s/describe (s/get-spec :ins/first-name))))
+;; => true
+
+;; (= 'string? (second (s/describe (s/get-spec :ins/first-name))))
+;; => true
