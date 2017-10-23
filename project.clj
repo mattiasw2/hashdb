@@ -31,6 +31,9 @@
                  [ring/ring-core "1.6.2"]
                  [ring/ring-defaults "0.3.1"]
 
+                 ;; make instrumentation check :ret and :fn too
+                 [orchestra "2017.08.13"]
+
                  ;; helper to get :req and similar får clojure spec:s
                  ;; https://github.com/lab-79/clojure-spec-helpers/blob/master/test/clojure_spec_helpers/core_test.clj
                  ;; not sure there is a clojar

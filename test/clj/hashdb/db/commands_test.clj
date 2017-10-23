@@ -45,4 +45,4 @@
 
 ;; bugs:
 
-;; 1. (hashdb.db.commands/history-by-entity nil) not working, returns ()
+;; 1. (hashdb.db.commands/history-by-entity nil) not working, returns () => fixed

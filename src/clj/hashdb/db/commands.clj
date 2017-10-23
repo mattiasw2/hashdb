@@ -5,7 +5,8 @@
    [clojure.java.jdbc :as jdbc]
    [clojure.java.jdbc :as sql]
    [hashdb.config :refer [env]]
-   [hashdb.db.core :as cmd])
+   [hashdb.db.core :as cmd]
+   [orchestra.spec.test :as stest])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
@@ -178,7 +179,8 @@
                           :before (pr-str m), :after "{}",
                           :updated (now), :version (inc (:version m)), :parent (:version m),
                           :is_merge 0,
-                          :userid nil, :sessionid nil, :comment nil})))
+                          :userid nil, :sessionid nil, :comment nil})
+    nil))
 
 
 (s/fdef delete-by-id-with-minimum-history
@@ -270,3 +272,5 @@
    Used to present who changed anything for this object."
   [id]
   (cmd/select-history-short {:id id}))
+
+(orchestra.spec.test/instrument)
