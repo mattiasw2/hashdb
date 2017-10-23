@@ -34,11 +34,12 @@
    Return the map incl the potentially created id."
   [m]
   (let [id0 (or (:id m) (uuid))
-        entity (or (:entity m) :unknown)
-        entity-str (pr-str entity)
+        entity (:entity m)
+        entity-str (when entity (pr-str entity))
         now0 (now)
         version 1
-        m (into m {:id id0 :updated now0 :version version :entity entity})
+        m0 (into m {:id id0 :updated now0 :version version})
+        m (if entity (assoc m0 :entity entity) m0)
         data (pr-str m)]
     (cmd/create-latest! {:id id0 :entity entity-str :data data :updated now0 :parent 0 :version version})
     (cmd/create-history! {:id id0, :entity entity-str, :deleted 0, :before "{}", :after data,
@@ -54,7 +55,9 @@
   [row m]
   (assert (and (= (:id row)(:id m))
                (= (:version row)(:version m))
-               (= (:entity row)(pr-str (:entity m))))
+               (if (:entity row)
+                 (= (:entity row)(pr-str (:entity m)))
+                 (nil? (:entity m))))
           "id, entity, and/or version and data columns in table latest are not in sync.")
   m)
 
@@ -107,11 +110,21 @@
         :ret seq?)
 
 (defn select-all-by-entity
-  "Return all rows for a given `entity`.
-   :unknown are special cases."
+  "Return all rows for a given `entity`."
   [entity]
   (map #(try-get-internal (:id %) %)
-       (cmd/select-all-latest-by-entity {:entity (pr-str entity)})))
+       (cmd/select-all-latest-by-entity {:entity (when entity (pr-str entity))})))
+
+
+(s/fdef select-all-nil-entity
+        :args (s/cat)
+        :ret seq?)
+
+(defn select-all-nil-entity
+  "Return all rows for unknown `entity`."
+  []
+  (map #(try-get-internal (:id %) %)
+       (cmd/select-all-latest-null-entity {})))
 
 
 (s/fdef update
@@ -142,7 +155,7 @@
 
     ;; why not in a transaction? since insert, it cannot fail.
     ;; and for non-acid-update, the history is the long-term truth, not the latest entry
-    (cmd/create-history! {:id id, :entity (pr-str (:entity m)), :deleted 0,
+    (cmd/create-history! {:id id, :entity (when (:entity m) (pr-str (:entity m))), :deleted 0,
                           :before (pr-str before), :after (pr-str changes),
                           :updated updated, :version version, :parent parent,
                           :is_merge 0,
@@ -161,7 +174,7 @@
   [m]
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
   (let [affected (cmd/delete-latest! m)]
-    (cmd/create-history! {:id (:id m), :entity (pr-str (:entity m)), :deleted 1,
+    (cmd/create-history! {:id (:id m), :entity (when (:entity m) (pr-str (:entity m))), :deleted 1,
                           :before (pr-str m), :after "{}",
                           :updated (now), :version (inc (:version m)), :parent (:version m),
                           :is_merge 0,
@@ -179,7 +192,7 @@
    We do not care if anyone has updated or deleted the row just before."
   [id]
   (let [affected (cmd/delete-latest! {:id id})]
-    (cmd/create-history! {:id id, :entity ":unknown", :deleted 1,
+    (cmd/create-history! {:id id, :entity nil, :deleted 1,
                           :before "{}", :after "{}",
                           :updated (now), :version 2000000001, :parent 2000000000,
                           :is_merge 0,
@@ -199,7 +212,7 @@
   (if-let [m (try-get id)]
     (let [affected (cmd/delete-latest! {:id (:id m)})
           version (:version m)]
-      (cmd/create-history! {:id (:id m), :entity (pr-str (:entity m)), :deleted 1,
+      (cmd/create-history! {:id (:id m), :entity (when (:entity m) (pr-str (:entity m))), :deleted 1,
                             :before (pr-str m), :after "{}",
                             :updated (now), :version (inc version), :parent version,
                             :is_merge 0,
@@ -211,7 +224,7 @@
   [m]
   (into m {:after (clojure.edn/read-string (:after m))
            :before (clojure.edn/read-string (:before m))
-           :entity (clojure.edn/read-string (:entity m))}))
+           :entity (when (:entity m) (clojure.edn/read-string (:entity m)))}))
 
 
 (s/fdef history
@@ -231,7 +244,17 @@
 (defn history-by-entity
   "Get the complete history for all entities of `entity`."
   [entity]
-  (map deserialize-history (cmd/select-history-by-entity {:entity (pr-str entity)})))
+  (map deserialize-history (cmd/select-history-by-entity {:entity (when entity (pr-str entity))})))
+
+
+(s/fdef history-nill-entity
+        :args (s/cat)
+        :ret seq?)
+
+(defn history-nil-entity
+  "Get the complete history for all entities of `entity`."
+  []
+  (map deserialize-history (cmd/select-history-null-entity {})))
 
 
 ;; this operation is most likely much faster for long histories since:

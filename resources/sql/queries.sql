@@ -27,6 +27,12 @@ SELECT id, entity, version, data FROM latest
 where entity = :entity
 
 
+-- :name select-all-latest-null-entity :? :*
+-- :doc retrieve all rows
+SELECT id, entity, version, data FROM latest
+where entity is null
+
+
 -- :name delete-latest! :! :n
 -- :doc delete a latest given the id
 DELETE FROM latest
@@ -50,6 +56,12 @@ WHERE ID = :id
 -- :doc retrieve all history rows for a latest entry
 SELECT * FROM history
 WHERE entity = :entity
+
+
+-- :name select-history-null-entity :? :*
+-- :doc retrieve all history rows for a latest entry
+SELECT * FROM history
+WHERE entity is null
 
 
 -- :name select-history-short :? :*
