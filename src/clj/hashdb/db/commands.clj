@@ -1,9 +1,9 @@
 (ns hashdb.db.commands
   (:require
-   [clojure.spec.alpha :as s]
    [clj-time.jdbc]
    [clojure.java.jdbc :as jdbc]
    [clojure.java.jdbc :as sql]
+   [clojure.spec.alpha :as s]
    [hashdb.config :refer [env]]
    [hashdb.db.core :as cmd]
    [orchestra.spec.test :as stest])
@@ -24,6 +24,23 @@
   (assert (some? v))
   v)
 
+;; (s/fdef fsome
+;;         :args (s/cat :form (s/cat :f symbol? :arg1 some?)) ; cannot use fn? since not parsed as function yet.
+;;         :ret (constantly true))
+
+;; I cannot undef the above spec, so I did like this for now
+(s/fdef fsome
+        :args (constantly true)
+        :ret  (constantly true))
+
+
+(defmacro fsome
+  "Use like (fsome (f arg1)), which is same as (f arg1), except that if arg1 is nil, nil is returned."
+  [[f arg1]]
+  `(let [arg1# ~arg1]
+     (when arg1# (~f arg1#))))
+
+
 
 (s/fdef create
         :args (s/cat :m map?)
@@ -36,7 +53,7 @@
   [m]
   (let [id0 (or (:id m) (uuid))
         entity (:entity m)
-        entity-str (when entity (pr-str entity))
+        entity-str (fsome (pr-str entity))
         now0 (now)
         version 1
         m0 (into m {:id id0 :updated now0 :version version})
@@ -114,7 +131,7 @@
   "Return all rows for a given `entity`."
   [entity]
   (map #(try-get-internal (:id %) %)
-       (cmd/select-all-latest-by-entity {:entity (when entity (pr-str entity))})))
+       (cmd/select-all-latest-by-entity {:entity (fsome (pr-str entity))})))
 
 
 (s/fdef select-all-nil-entity
@@ -148,7 +165,8 @@
         before (select-keys m (keys changes))
         data (into (into m changes) {:updated updated :version version})
         data-str (pr-str data)
-        affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data-str})]
+        affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data-str})
+        entity-str (fsome (pr-str (:entity m)))]
     (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
                                          {:id id :updated parent}))
           (> affected 1) (throw (ex-info (str "Row " id " existed several times in db.")
@@ -156,7 +174,7 @@
 
     ;; why not in a transaction? since insert, it cannot fail.
     ;; and for non-acid-update, the history is the long-term truth, not the latest entry
-    (cmd/create-history! {:id id, :entity (when (:entity m) (pr-str (:entity m))), :deleted 0,
+    (cmd/create-history! {:id id, :entity entity-str, :deleted 0,
                           :before (pr-str before), :after (pr-str changes),
                           :updated updated, :version version, :parent parent,
                           :is_merge 0,
@@ -174,8 +192,9 @@
    Will leave a perfect history."
   [m]
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
-  (let [affected (cmd/delete-latest! m)]
-    (cmd/create-history! {:id (:id m), :entity (when (:entity m) (pr-str (:entity m))), :deleted 1,
+  (let [affected (cmd/delete-latest! m)
+        entity-str (fsome (pr-str (:entity m)))]
+    (cmd/create-history! {:id (:id m), :entity entity-str, :deleted 1,
                           :before (pr-str m), :after "{}",
                           :updated (now), :version (inc (:version m)), :parent (:version m),
                           :is_merge 0,
@@ -214,7 +233,7 @@
   (if-let [m (try-get id)]
     (let [affected (cmd/delete-latest! {:id (:id m)})
           version (:version m)]
-      (cmd/create-history! {:id (:id m), :entity (when (:entity m) (pr-str (:entity m))), :deleted 1,
+      (cmd/create-history! {:id (:id m), :entity (fsome (pr-str (:entity m))), :deleted 1,
                             :before (pr-str m), :after "{}",
                             :updated (now), :version (inc version), :parent version,
                             :is_merge 0,
@@ -226,7 +245,7 @@
   [m]
   (into m {:after (clojure.edn/read-string (:after m))
            :before (clojure.edn/read-string (:before m))
-           :entity (when (:entity m) (clojure.edn/read-string (:entity m)))}))
+           :entity (fsome (clojure.edn/read-string (:entity m)))}))
 
 
 (s/fdef history
@@ -246,7 +265,7 @@
 (defn history-by-entity
   "Get the complete history for all entities of `entity`."
   [entity]
-  (map deserialize-history (cmd/select-history-by-entity {:entity (when entity (pr-str entity))})))
+  (map deserialize-history (cmd/select-history-by-entity {:entity (fsome (pr-str entity))})))
 
 
 (s/fdef history-nill-entity
