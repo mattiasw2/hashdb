@@ -51,19 +51,19 @@
    If `:id` is in `m`, use it, otherwise create one.
    Return the map incl the potentially created id."
   [m]
-  (let [id0 (or (:id m) (uuid))
-        entity (:entity m)
+  (let [id0        (or (:id m) (uuid))
+        entity     (:entity m)
         entity-str (fsome (pr-str entity))
-        now0 (now)
-        version 1
-        m0 (into m {:id id0 :updated now0 :version version})
-        m (if entity (assoc m0 :entity entity) m0)
-        data (pr-str m)]
+        now0       (now)
+        version    1
+        m0         (into m {:id id0 :updated now0 :version version})
+        m          (if entity (assoc m0 :entity entity) m0)
+        data       (pr-str m)]
     (cmd/create-latest! {:id id0 :entity entity-str :data data :updated now0 :parent 0 :version version})
-    (cmd/create-history! {:id id0, :entity entity-str, :deleted 0, :before "{}", :after data,
-                          :updated now0, :version version, :parent 0,
+    (cmd/create-history! {:id       id0,  :entity    entity-str, :deleted 0, :before "{}", :after data,
+                          :updated  now0, :version   version,    :parent  0,
                           :is_merge 0,
-                          :userid nil, :sessionid nil, :comment nil})
+                          :userid   nil,  :sessionid nil,        :comment nil})
     m))
 
 (defn- verify-row-in-sync
@@ -83,7 +83,7 @@
   "Return map at `id`, null if not found."
   [id row]
   (let [row (cmd/get-latest {:id id})
-        m (clojure.edn/read-string (:data row))]
+        m   (clojure.edn/read-string (:data row))]
     (when row (assert (and (= id (:id row)))
                     "id and/or version and data columns in table latest are not in sync."))
     (when m (verify-row-in-sync row m))
@@ -157,15 +157,15 @@
   (assert (nil? (:id changes)) "Changing :id is not allowed!")
   (assert (nil? (:entity changes)) "Changing :entity is not allowed!")
   (assert (and (some? (:version m))(>= (:version m) 1)) "Version 0 should be create:d!")
-  (let [id (nn (:id m))
-        parent (nn (:version m))
+  (let [id         (nn (:id m))
+        parent     (nn (:version m))
         ;; for the non-acid update, (inc parent) will not do, maybe I need to using timestamp again
-        version (inc parent)
-        updated (now)
-        before (select-keys m (keys changes))
-        data (into (into m changes) {:updated updated :version version})
-        data-str (pr-str data)
-        affected (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data-str})
+        version    (inc parent)
+        updated    (now)
+        before     (select-keys m (keys changes))
+        data       (into (into m changes) {:updated updated :version version})
+        data-str   (pr-str data)
+        affected   (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data-str})
         entity-str (fsome (pr-str (:entity m)))]
     (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
                                          {:id id :updated parent}))
@@ -174,11 +174,11 @@
 
     ;; why not in a transaction? since insert, it cannot fail.
     ;; and for non-acid-update, the history is the long-term truth, not the latest entry
-    (cmd/create-history! {:id id, :entity entity-str, :deleted 0,
-                          :before (pr-str before), :after (pr-str changes),
-                          :updated updated, :version version, :parent parent,
+    (cmd/create-history! {:id       id,              :entity    entity-str, :deleted 0,
+                          :before   (pr-str before), :after     (pr-str changes),
+                          :updated  updated,         :version   version,    :parent  parent,
                           :is_merge 0,
-                          :userid nil, :sessionid nil, :comment nil})
+                          :userid   nil,             :sessionid nil,        :comment nil})
 
     data))
 
@@ -192,13 +192,13 @@
    Will leave a perfect history."
   [m]
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
-  (let [affected (cmd/delete-latest! m)
+  (let [affected   (cmd/delete-latest! m)
         entity-str (fsome (pr-str (:entity m)))]
-    (cmd/create-history! {:id (:id m), :entity entity-str, :deleted 1,
-                          :before (pr-str m), :after "{}",
-                          :updated (now), :version (inc (:version m)), :parent (:version m),
+    (cmd/create-history! {:id       (:id m),    :entity    entity-str,         :deleted 1,
+                          :before   (pr-str m), :after     "{}",
+                          :updated  (now),      :version   (inc (:version m)), :parent  (:version m),
                           :is_merge 0,
-                          :userid nil, :sessionid nil, :comment nil})
+                          :userid   nil,        :sessionid nil,                :comment nil})
     nil))
 
 
@@ -213,11 +213,11 @@
    We do not care if anyone has updated or deleted the row just before."
   [id]
   (let [affected (cmd/delete-latest! {:id id})]
-    (cmd/create-history! {:id id, :entity nil, :deleted 1,
-                          :before "{}", :after "{}",
-                          :updated (now), :version 2000000001, :parent 2000000000,
+    (cmd/create-history! {:id       id,    :entity    nil,        :deleted 1,
+                          :before   "{}",  :after     "{}",
+                          :updated  (now), :version   2000000001, :parent  2000000000,
                           :is_merge 0,
-                          :userid nil, :sessionid nil, :comment nil})
+                          :userid   nil,   :sessionid nil,        :comment nil})
     nil))
 
 
@@ -232,12 +232,12 @@
   [id]
   (if-let [m (try-get id)]
     (let [affected (cmd/delete-latest! {:id (:id m)})
-          version (:version m)]
-      (cmd/create-history! {:id (:id m), :entity (fsome (pr-str (:entity m))), :deleted 1,
-                            :before (pr-str m), :after "{}",
-                            :updated (now), :version (inc version), :parent version,
+          version  (:version m)]
+      (cmd/create-history! {:id       (:id m),    :entity    (fsome (pr-str (:entity m))), :deleted 1,
+                            :before   (pr-str m), :after     "{}",
+                            :updated  (now),      :version   (inc version),                :parent  version,
                             :is_merge 0,
-                            :userid nil, :sessionid nil, :comment nil})
+                            :userid   nil,        :sessionid nil,                          :comment nil})
       nil)))
 
 (defn- deserialize-history
