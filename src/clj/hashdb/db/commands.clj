@@ -182,6 +182,25 @@
 
     data))
 
+
+(s/fdef update-diff
+        :args (s/cat :m-old map? :m-new map?)
+        :ret map?)
+
+;; (into {} (clojure.set/difference (into #{} {:a 1, :b 2, :d 4}) (into #{} {:a 2, :c 3, :d 4})))
+;; => {:b 2, :a 1}
+(defn- map-difference
+  "Remove all kv-pairs in `m-new` that already exists in `m-old`."
+  [m-new m-old]
+  (into {} (clojure.set/difference (into #{} m-new) (into #{} m-old))))
+
+(defn update-diff
+  "Find the differences made and then update db."
+  [m-old m-new]
+  (let [changes (map-difference m-new m-old)]
+    (update m-old changes)))
+
+
 (s/fdef delete
         :args (s/cat :m map?)
         :ret nil?)
