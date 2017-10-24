@@ -5,6 +5,7 @@
    [clojure.java.jdbc :as sql]
    [clojure.spec.alpha :as s]
    [hashdb.config :refer [env]]
+   [hashdb.db.core :refer [*db*]]
    [hashdb.db.core :as cmd]
    [orchestra.spec.test :as stest])
   (:import [java.sql
@@ -59,12 +60,15 @@
         m0         (into m {:id id0 :updated now0 :version version})
         m          (if entity (assoc m0 :entity entity) m0)
         data       (pr-str m)]
-    (cmd/create-latest! {:id id0 :entity entity-str :data data :updated now0 :parent 0 :version version})
-    (cmd/create-history! {:id       id0,  :entity    entity-str, :deleted 0, :before "{}", :after data,
-                          :updated  now0, :version   version,    :parent  0,
-                          :is_merge 0,
-                          :userid   nil,  :sessionid nil,        :comment nil})
-    m))
+    (sql/with-db-transaction [conn *db*]
+      (cmd/create-latest! conn
+                          {:id id0 :entity entity-str :data data :updated now0 :parent 0 :version version})
+      (cmd/create-history! conn
+                           {:id       id0,  :entity    entity-str, :deleted 0, :before "{}", :after data,
+                            :updated  now0, :version   version,    :parent  0,
+                            :is_merge 0,
+                            :userid   nil,  :sessionid nil,        :comment nil})
+      m)))
 
 (defn- verify-row-in-sync
   "Make sure db `row` is in sync with `m` from the :data column.
@@ -165,22 +169,24 @@
         before     (select-keys m (keys changes))
         data       (into (into m changes) {:updated updated :version version})
         data-str   (pr-str data)
-        affected   (cmd/update-latest! {:id id :parent parent :updated updated :version version :data data-str})
         entity-str (fsome (pr-str (:entity m)))]
-    (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
-                                         {:id id :updated parent}))
-          (> affected 1) (throw (ex-info (str "Row " id " existed several times in db.")
-                                         {:id id :updated parent})))
+    (sql/with-db-transaction [conn *db*]
+      (let [affected (cmd/update-latest! conn {:id id :parent parent :updated updated :version version :data data-str})]
+        (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
+                                             {:id id :updated parent}))
+              (> affected 1) (throw (ex-info (str "Row " id " existed several times in db.")
+                                             {:id id :updated parent})))
 
-    ;; why not in a transaction? since insert, it cannot fail.
-    ;; and for non-acid-update, the history is the long-term truth, not the latest entry
-    (cmd/create-history! {:id       id,              :entity    entity-str, :deleted 0,
-                          :before   (pr-str before), :after     (pr-str changes),
-                          :updated  updated,         :version   version,    :parent  parent,
-                          :is_merge 0,
-                          :userid   nil,             :sessionid nil,        :comment nil})
+        ;; why not in a transaction? since insert, it cannot fail.
+        ;; and for non-acid-update, the history is the long-term truth, not the latest entry
+        (cmd/create-history! conn
+                             {:id       id,              :entity    entity-str, :deleted 0,
+                              :before   (pr-str before), :after     (pr-str changes),
+                              :updated  updated,         :version   version,    :parent  parent,
+                              :is_merge 0,
+                              :userid   nil,             :sessionid nil,        :comment nil}))
 
-    data))
+      data)))
 
 
 (s/fdef update-diff
@@ -211,14 +217,16 @@
    Will leave a perfect history."
   [m]
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
-  (let [affected   (cmd/delete-latest! m)
-        entity-str (fsome (pr-str (:entity m)))]
-    (cmd/create-history! {:id       (:id m),    :entity    entity-str,         :deleted 1,
-                          :before   (pr-str m), :after     "{}",
-                          :updated  (now),      :version   (inc (:version m)), :parent  (:version m),
-                          :is_merge 0,
-                          :userid   nil,        :sessionid nil,                :comment nil})
-    nil))
+  (sql/with-db-transaction [conn *db*]
+    (let [affected   (cmd/delete-latest! conn m)
+          entity-str (fsome (pr-str (:entity m)))]
+      (cmd/create-history! conn
+                           {:id       (:id m),    :entity    entity-str,         :deleted 1,
+                            :before   (pr-str m), :after     "{}",
+                            :updated  (now),      :version   (inc (:version m)), :parent  (:version m),
+                            :is_merge 0,
+                            :userid   nil,        :sessionid nil,                :comment nil})
+      nil)))
 
 
 (s/fdef delete-by-id-with-minimum-history
@@ -231,13 +239,15 @@
    Workaround, read the record first, use delete-by-id.
    We do not care if anyone has updated or deleted the row just before."
   [id]
-  (let [affected (cmd/delete-latest! {:id id})]
-    (cmd/create-history! {:id       id,    :entity    nil,        :deleted 1,
-                          :before   "{}",  :after     "{}",
-                          :updated  (now), :version   2000000001, :parent  2000000000,
-                          :is_merge 0,
-                          :userid   nil,   :sessionid nil,        :comment nil})
-    nil))
+  (sql/with-db-transaction [conn *db*]
+    (let [affected (cmd/delete-latest! conn {:id id})]
+      (cmd/create-history! conn
+                           {:id       id,    :entity    nil,        :deleted 1,
+                            :before   "{}",  :after     "{}",
+                            :updated  (now), :version   2000000001, :parent  2000000000,
+                            :is_merge 0,
+                            :userid   nil,   :sessionid nil,        :comment nil})
+      nil)))
 
 
 (s/fdef delete-by-id
@@ -250,14 +260,16 @@
    We do not care if anyone has updated or deleted the row just before."
   [id]
   (if-let [m (try-get id)]
-    (let [affected (cmd/delete-latest! {:id (:id m)})
-          version  (:version m)]
-      (cmd/create-history! {:id       (:id m),    :entity    (fsome (pr-str (:entity m))), :deleted 1,
-                            :before   (pr-str m), :after     "{}",
-                            :updated  (now),      :version   (inc version),                :parent  version,
-                            :is_merge 0,
-                            :userid   nil,        :sessionid nil,                          :comment nil})
-      nil)))
+    (sql/with-db-transaction [conn *db*]
+      (let [affected (cmd/delete-latest! conn {:id (:id m)})
+            version  (:version m)]
+        (cmd/create-history! conn
+                             {:id       (:id m),    :entity    (fsome (pr-str (:entity m))), :deleted 1,
+                              :before   (pr-str m), :after     "{}",
+                              :updated  (now),      :version   (inc version),                :parent  version,
+                              :is_merge 0,
+                              :userid   nil,        :sessionid nil,                          :comment nil})
+        nil))))
 
 (defn- deserialize-history
   "Deserialize the :before and :after keys of `m`."
