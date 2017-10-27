@@ -46,7 +46,7 @@
         :args (constantly true)
         :ret  (constantly true))
 
-
+;; should be renamed to fwhen, since replacement of when.
 (defmacro fsome
   "Use like (fsome (f arg1)), which is same as (f arg1), except that if arg1 is nil, nil is returned."
   [[f arg1]]
@@ -54,12 +54,13 @@
      (when arg1# (~f arg1#))))
 
 
+(s/def ::datetime #(instance? java.util.Date %))
 
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/nilable (s/and string? #(<= (count %) 36))))
 (s/def ::entity (s/nilable keyword?))
 (s/def ::deleted int?)
-(s/def ::data (s/map-of keyword? (s/or :num float? :string string? :nil nil?))) ; map?
+(s/def ::data (s/map-of keyword? (s/or :int int? :float float? :string string? :nil nil? :datetime ::datetime)))
 (s/def ::before map?)
 (s/def ::after map?)
 (s/def ::updated (constantly true))     ; should check that time
@@ -78,8 +79,12 @@
   (s/keys :req-un [::id ::deleted ::before ::after ::updated ::version ::parent]
           :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
 
+(s/def ::stored-history-short
+  (s/keys :req-un [::id ::deleted ::updated ::version ::parent]
+          :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
+
 (s/fdef create
-        :args (s/cat :m map?)
+        :args (s/cat :m ::data)
         :ret ::stored-latest)
 
 (defn create
@@ -131,7 +136,7 @@
 
 (s/fdef try-get
         :args (s/cat :id string?)
-        :ret (s/nilable map?))
+        :ret (s/nilable ::stored-latest))
 
 (defn try-get
   "Return map at `id`, null if not found."
@@ -141,7 +146,7 @@
 
 (s/fdef get
         :args (s/cat :id string?)
-        :ret map?)
+        :ret ::stored-latest)
 
 (defn get
   "Return map at `id`, exception if not found."
@@ -153,7 +158,7 @@
 
 (s/fdef select-all
         :args (s/cat)
-        :ret seq?)
+        :ret (s/* ::stored-latest))
 
 (defn select-all
   "Return all rows."
@@ -164,7 +169,7 @@
 
 (s/fdef select-all-by-entity
         :args (s/cat :entity keyword?)
-        :ret seq?)
+        :ret (s/* ::stored-latest))
 
 (defn select-all-by-entity
   "Return all rows for a given `entity`."
@@ -175,7 +180,7 @@
 
 (s/fdef select-all-nil-entity
         :args (s/cat)
-        :ret seq?)
+        :ret (s/* ::stored-latest))
 
 (defn select-all-nil-entity
   "Return all rows for unknown `entity`."
@@ -185,8 +190,8 @@
 
 
 (s/fdef update
-        :args (s/cat :m map? :changes map?)
-        :ret map?)
+        :args (s/cat :m ::stored-latest :changes ::data)
+        :ret ::stored-latest)
 
 (defn update
   "Map `m` is the one currently stored in the db.
@@ -224,16 +229,23 @@
       data)))
 
 
-(s/fdef update-diff
-        :args (s/cat :m-old map? :m-new map?)
-        :ret map?)
-
 ;; (into {} (clojure.set/difference (into #{} {:a 1, :b 2, :d 4}) (into #{} {:a 2, :c 3, :d 4})))
 ;; => {:b 2, :a 1}
+
+(s/fdef map-difference
+        :args (s/cat :m-new map? :m_old map?)
+        :ret map?)
+
 (defn- map-difference
   "Remove all kv-pairs in `m-new` that already exists in `m-old`."
   [m-new m-old]
   (into {} (clojure.set/difference (into #{} m-new) (into #{} m-old))))
+
+
+(s/fdef update-diff
+        :args (s/cat :m ::stored-latest :changes ::data)
+        :ret ::stored-latest)
+
 
 (defn update-diff
   "Find the differences made and then update db."
@@ -243,7 +255,7 @@
 
 
 (s/fdef delete
-        :args (s/cat :m map?)
+        :args (s/cat :m ::data)
         :ret nil?)
 
 (defn delete
@@ -286,7 +298,7 @@
 
 
 (s/fdef delete-by-id
-        :args (s/cat :id string?)
+        :args (s/cat :id ::uuid-str)
         :ret nil?)
 
 (defn delete-by-id
@@ -315,8 +327,8 @@
 
 
 (s/fdef history
-        :args (s/cat :id string?)
-        :ret seq?)
+        :args (s/cat :id ::uuid-str)
+        :ret  (s/* ::stored-history))
 
 (defn history
   "Get the complete history for `id`."
@@ -326,7 +338,8 @@
 
 (s/fdef history-by-entity
         :args (s/cat :entity keyword?)
-        :ret seq?)
+        :ret  (s/* ::stored-history))
+
 
 (defn history-by-entity
   "Get the complete history for all entities of `entity`."
@@ -336,7 +349,7 @@
 
 (s/fdef history-nill-entity
         :args (s/cat)
-        :ret seq?)
+        :ret  (s/* ::stored-history))
 
 (defn history-nil-entity
   "Get the complete history for all entities of `entity`."
@@ -350,7 +363,7 @@
 ;;    This is a compromise that sometimes helps, sometimes hurts performance.
 (s/fdef history-short
         :args (s/cat :id string?)
-        :ret seq?)
+        :ret  (s/* ::stored-history-short))
 
 (defn history-short
   "Get the complete history for `id`, but do not read :before and :after.
