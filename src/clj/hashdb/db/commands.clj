@@ -7,18 +7,30 @@
    [hashdb.config :refer [env]]
    [hashdb.db.core :refer [*db*]]
    [hashdb.db.core :as cmd]
-   [orchestra.spec.test :as stest])
+   [clojure.spec.gen.alpha :as gen]
+   [clojure.spec.test.alpha :as stest2]
+   [orchestra.spec.test]
+   [mw.std :refer :all])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
 
+;; uuid? is the underlaying, not sure how this is mapped to db
+
+(s/def ::uuid-str (s/and string? #(<= (count %) 36)))
+(s/fdef uuid
+        :args (s/cat)
+        :ret  ::uuid-str)
 
 (defn uuid []
+  "Return a uuid as string."
   (str (java.util.UUID/randomUUID)))
 
 (defn now []
+  "Return now in UTC."
   (new java.util.Date))
 
+#_
 (defn nn
   "not-nil: abort if value nil"
   [v]
@@ -43,12 +55,35 @@
 
 
 
+(s/def ::id ::uuid-str)
+(s/def ::entity-str (s/nilable (s/and string? #(<= (count %) 36))))
+(s/def ::entity (s/nilable keyword?))
+(s/def ::deleted int?)
+(s/def ::data (s/map-of keyword? (s/or :num float? :string string? :nil nil?))) ; map?
+(s/def ::before map?)
+(s/def ::after map?)
+(s/def ::updated (constantly true))     ; should check that time
+(s/def ::version (s/and int? pos?))
+(s/def ::parent (s/and int? #(>= % 0)))
+(s/def ::is_merge int?)
+(s/def ::userid (s/nilable ::uuid-str))
+(s/def ::sessionid (s/nilable ::uuid-str))
+(s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
+
+(s/def ::stored-latest
+  (s/keys :req-un [::id ::updated ::version]
+          :opt-un [::entity]))
+
+(s/def ::stored-history
+  (s/keys :req-un [::id ::deleted ::before ::after ::updated ::version ::parent]
+          :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
+
 (s/fdef create
         :args (s/cat :m map?)
-        :ret map?)
+        :ret ::stored-latest)
 
 (defn create
-  "Insert map `m`.
+  "Insert map `m` into db.
    If `:id` is in `m`, use it, otherwise create one.
    Return the map incl the potentially created id."
   [m]

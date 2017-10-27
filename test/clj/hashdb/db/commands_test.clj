@@ -6,11 +6,79 @@
    [clojure.java.jdbc :as jdbc]
    [clojure.java.jdbc :as sql]
    [hashdb.config :refer [env]]
-   [hashdb.db.core :as cmd])
+   [hashdb.db.core :as cmd]
+   [clojure.spec.alpha :as s]
+   [clojure.spec.gen.alpha :as gen]
+   [mw.std :refer :all]
+   [clojure.spec.test.alpha :as stest])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
 
+(s/def ::small-map (s/and map? #(< (count %) 20)))
+(s/def ::large-map (s/and map? #(> (count %) 200)))
+
+(defn play-with-spec-test
+  []
+  ;; (s/conform ::uuid-str "0000000000000000000000000000000000000")
+  (stest/check `create)
+  #_(stest/check `delete-by-id-with-minimum-history))
+
+;; below timing result DISTORTED by slow generation of sample data
+;; (timed "exercise" (def m1 (first (last (s/exercise map? 1000)))))
+;; "Timed: exercise : 34237.450385 msecs"
+
+;; with compression
+
+;; (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+;; "Timed: exercise : 16754.472192 msecs"
+;; #'hashdb.db.commands-test/m2s
+;; hashdb.db.commands-test> (timed "" (doseq [m m2s] (create m)))
+;; "Timed:  doseq: 7299.823052 msecs"
+;; nil
+;; hashdb.db.commands-test>
+
+;; (timed "" (def saved-m2s (mapv create m2s)))
+
+;; "Timed:  : 7086.722663 msecs"
+;; #'hashdb.db.commands-test/saved-m2s
+;; hashdb.db.commands-test>
+;; (first saved-m2s)
+;; {:s nil, :* nil, :+ 1.0, :id "30a7b320-fe4d-4216-9ba5-c1db4e9c799c", :updated #inst "2017-10-25T11:55:56.783-00:00", :version 1}
+
+;; **************************************************************** update
+;; update takes same sort of time, i.e 100+ per second
+;; hashdb.db.commands-test> (timed "" (def saved-m3s (mapv #(update % {:hej "mattias"}) saved-m2s)))
+;; "Timed:  : 6265.730056 msecs"
+
+;; **************************************************************** delete
+;; (timed "" (def saved-m4s (mapv #(delete %) saved-m3s)))
+;; "Timed:  : 6083.791703 msecs"
+
+;; the above performance is for 1 thread, i.e. depends on latency
+;; (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+;; "Timed: exercise : 15841.978657 msecs"
+;; #'hashdb.db.commands-test/m2s
+;; hashdb.db.commands-test> (timed "" (doseq [m m2s] (create m)))
+;; "Timed:  doseq: 8725.000227 msecs"
+;; nil
+;; hashdb.db.commands-test> (timed "exercise" (def n2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+;; "Timed: exercise : 15583.56395 msecs"
+;; #'hashdb.db.commands-test/n2s
+;; hashdb.db.commands-test> (future (timed "" (doseq [m m2s] (create m))))
+;; #future[{:status :pending, :val nil} 0x36ea0243]
+;; hashdb.db.commands-test> (future (timed "" (doseq [m n2s] (create m))))
+;; #future[{:status :pending, :val nil} 0x3204baed]
+;; hashdb.db.commands-test> "Timed:  doseq: 7902.750535 msecs"
+;; "Timed:  doseq: 7708.286371 msecs"
+
+
+
+;; (doseq [m (s/exercise map? 1000)] (create (first m)))
+;; (doseq [m (s/exercise ::small-map 1000)] (create (first m)))
+;; (doseq [m (s/exercise ::large-map 1000)] (create (first m)))
+;;
+;; big stuff is slow to store, make two tests: small-maps and big-maps
 
 ;; (deftest test-app
 ;;   (testing "main route"

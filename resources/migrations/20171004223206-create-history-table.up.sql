@@ -16,4 +16,6 @@ CREATE TABLE `history`
  `sessionid` VARCHAR(36) NULL,
  `comment` VARCHAR(1000) NULL
 --  PRIMARY KEY (`id`,`updated`)
-  );
+  )
+ ROW_FORMAT=COMPRESSED
+ KEY_BLOCK_SIZE=8;

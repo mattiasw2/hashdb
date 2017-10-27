@@ -1,3 +1,4 @@
+-- https://dev.mysql.com/doc/refman/5.6/en/innodb-compression-usage.html
 CREATE TABLE `hashdb_dev`.`latest` (
   `id` VARCHAR(36) NOT NULL,
   `entity` VARCHAR(36) NULL DEFAULT NULL,
@@ -5,4 +6,6 @@ CREATE TABLE `hashdb_dev`.`latest` (
   `updated` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `version` INT NOT NULL,
   `parent` INT NOT NULL,
-  PRIMARY KEY (`id`));
+  PRIMARY KEY (`id`))
+ ROW_FORMAT=COMPRESSED
+ KEY_BLOCK_SIZE=8;
