@@ -15,8 +15,30 @@
             BatchUpdateException
             PreparedStatement]))
 
-;; uuid? is the underlaying, not sure how this is mapped to db
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; some spec-helpers
 
+;; defn since s/with-gen function
+(defn dev-with-gen
+  "Only generator in dev code."
+  [spec gen-fn]
+  (if (:dev env)
+    (s/with-gen spec gen-fn)
+    spec))
+
+;; defmacro, since s/or macro
+(defmacro dev-spec-or
+  "In dev (dev-spec-or :a a :b b) same as (s/or :a a :b b), but in
+   prod only a."
+  [k1 pred1 k2 pred2]
+  (if (:dev env)
+    `(s/or ~k1 ~pred1 ~k2 ~pred2)
+    pred1))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; specs for api and storage
+
+;; uuid? is the underlaying, not sure how this is mapped to db
 (s/def ::uuid-str (s/and string? #(<= (count %) 36)))
 (s/fdef uuid
         :args (s/cat)
@@ -30,12 +52,6 @@
   "Return now in UTC."
   (new java.util.Date))
 
-#_
-(defn nn
-  "not-nil: abort if value nil"
-  [v]
-  (assert (some? v))
-  v)
 
 ;; (s/fdef fsome
 ;;         :args (s/cat :form (s/cat :f symbol? :arg1 some?)) ; cannot use fn? since not parsed as function yet.
@@ -63,8 +79,8 @@
      (when arg1# (~f arg1#))))
 
 
-(s/def ::datetime (s/with-gen #(instance? java.util.Date %)
-                    #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
+(s/def ::datetime (dev-with-gen #(instance? java.util.Date %)
+                                #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
 
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/nilable (s/and string? #(<= (count %) 36))))
@@ -94,8 +110,35 @@
 ;;         :map map?
 ;;         :vector vector?
 ;;         :seq seq?))
-(s/def ::data
-  (s/map-of keyword? any?))
+
+;; Added some known keys, which I can use for indexing testing
+
+;; trial 1 (but then I missed the types of the index)
+;; (s/def ::key
+;;   (dev-spec-or :normal keyword? :dev #{:a :b :c :d :e}))
+;; (s/def ::data
+;;   (s/map-of ::key any?))
+;;
+;; trial 2
+;; use s/merge, which merges maps.
+;; In order to sync keyword with types, you need to use s/keys
+;; SUCCESS!
+
+(if-not (:dev env)
+  (s/def ::data
+    (s/map-of ::key any?))
+  (do
+    (s/def ::s1 string?)
+    (s/def ::s2 string?)
+    (s/def ::s3 string?)
+    (s/def ::s4 string?)
+    (s/def ::i1 int?)
+    (s/def ::i2 int?)
+    (s/def ::indexed-data
+      (s/keys :opt-un [::s1 ::s2 ::s3 ::s4 ::i1 ::i2]))
+    (s/def ::data
+      (s/merge (s/map-of ::key any?) ::indexed-data))))
+
 
 (s/def ::stored-latest
   (s/keys :req-un [::id ::updated ::version]
@@ -155,7 +198,7 @@
   (let [row (cmd/get-latest {:id id})
         m   (clojure.edn/read-string (:data row))]
     (when row (assert (and (= id (:id row)))
-                    "id and/or version and data columns in table latest are not in sync."))
+                      "id and/or version and data columns in table latest are not in sync."))
     (when m (verify-row-in-sync row m))
     m))
 

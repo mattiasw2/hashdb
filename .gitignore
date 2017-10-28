@@ -15,3 +15,5 @@ profiles.clj
 /src/clj/hashdb/db/*.clj~
 /test/clj/hashdb/db/*.clj~
 *.clj~
+*.clj#
+.#*.clj
