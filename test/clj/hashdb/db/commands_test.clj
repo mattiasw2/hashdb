@@ -31,29 +31,22 @@
 ;; with compression
 
 ;; (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
-;; "Timed: exercise : 16754.472192 msecs"
-;; #'hashdb.db.commands-test/m2s
-;; hashdb.db.commands-test> (timed "" (doseq [m m2s] (create! m)))
-;; "Timed:  doseq: 7299.823052 msecs"
-;; nil
-;; hashdb.db.commands-test>
 
-;; (timed "" (def saved-m2s (mapv create! m2s)))
-
-;; "Timed:  : 7086.722663 msecs"
+;; hashdb.db.commands-test> (timed "create!" (def saved-m2s (mapv create! m2s)))
+;; "Timed: create! : 16609.213303 msecs"
 ;; #'hashdb.db.commands-test/saved-m2s
+;; hashdb.db.commands-test> (first saved-m2s)
+;; {:y nil, :L [], :* (), :F [], :_ [], :updated #inst "2017-10-28T08:53:27.446-00:00", :P (), :D [], :B nil, :s4 "", :k nil, :g nil, :+ [], :h nil, :id "43eeb8f7-70a7-4223-a60b-ee08db9de13a", :d (), :i2 0, :version 1, :! nil, :i1 0, :s1 "", :U (), :s3 "", :u [], :s2 ""}
+;; hashdb.db.commands-test> (timed "update" (def saved-m3s (mapv #(update % {:hej "mattias"}) saved-m2s)))
+;; ArityException Wrong number of args (2) passed to: core/update  clojure.lang.AFn.throwArity (AFn.java:429)
+;; hashdb.db.commands-test> (timed "update" (def saved-m3s (mapv #(update! % {:hej "mattias"}) saved-m2s)))
+;; "Timed: update : 11139.300576 msecs"
+;; #'hashdb.db.commands-test/saved-m3s
+;; hashdb.db.commands-test> (timed "delete" (def saved-m4s (mapv #(delete! %) saved-m3s)))
+;; "Timed: delete : 10234.706684 msecs"
+;; #'hashdb.db.commands-test/saved-m4s
 ;; hashdb.db.commands-test>
-;; (first saved-m2s)
-;; {:s nil, :* nil, :+ 1.0, :id "30a7b320-fe4d-4216-9ba5-c1db4e9c799c", :updated #inst "2017-10-25T11:55:56.783-00:00", :version 1}
 
-;; **************************************************************** update
-;; update takes same sort of time, i.e 100+ per second
-;; hashdb.db.commands-test> (timed "" (def saved-m3s (mapv #(update % {:hej "mattias"}) saved-m2s)))
-;; "Timed:  : 6265.730056 msecs"
-
-;; **************************************************************** delete
-;; (timed "" (def saved-m4s (mapv #(delete %) saved-m3s)))
-;; "Timed:  : 6083.791703 msecs"
 
 ;; the above performance is for 1 thread, i.e. depends on latency
 ;; (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
