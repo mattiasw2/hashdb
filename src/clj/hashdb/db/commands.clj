@@ -155,6 +155,41 @@
   (s/keys :req-un [::id ::deleted ::updated ::version ::parent]
           :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
 
+(s/fdef indexes
+        :args (s/cat :m ::data)
+        :ret (s/map-of keyword? #{:string :long}))
+
+;; TODO: implement a function that returns this list.
+;; TODO: For now, it is hard-coded
+(defn indexes
+  "Depending on the entity and other fields in `m`, return the indexes.
+   Only non-nil values will be indexed."
+  [m]
+  {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
+   :i1 :long, :i2 :long})
+
+
+;; algorithm #1 for update-indexes!
+;; 1. keep only fields in before and after that have indexes
+;; 2. for the difference, 3 options:
+;; 3a. nil or non-existent in before, exists in after => insert
+;; 3b. exists in before, nil or non-existent in after => delete
+;; 3c. exists in before, exists in after => update
+;;
+;; optimization, if I want to use mult-insert, it is best if we loop per type,
+;; i.e. first for :string, then for :int
+
+(s/fdef update-indexes!
+        :args (s/cat :before ::data :after ::data)
+        :ret nil?)
+
+(defn update-indexes!
+  "Update all index entries that have been changed.
+   If it is a new object, before should be empty.
+   If it is a delete, after should be empty."
+  [before after])
+
+
 (s/fdef create!
         :args (s/cat :m ::data)
         :ret ::stored-latest)

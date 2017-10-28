@@ -23,3 +23,6 @@
 
 (defn rollback []
   (migrations/migrate ["rollback"] (select-keys env [:database-url])))
+
+;; How to create migration files from repl
+;; (luminus-migrations.core/create "create-string-index" {})

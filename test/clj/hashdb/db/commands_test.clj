@@ -111,3 +111,13 @@
 ;; bugs:
 
 ;; 1. (hashdb.db.commands/history-by-entity nil) not working, returns () => fixed
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; index testing
+
+
+(deftest cycle-string-index-operations
+  (is (= 1 (hashdb.db.core/create-string-index! {:id "hejsan" :entity nil, :index_data "foo"})))
+  (is (= 1 (hashdb.db.core/update-string-index! {:id "hejsan" :index_data "bar"})))
+  (is (= 1 (hashdb.db.core/delete-string-index! {:id "hejsan"}))))
