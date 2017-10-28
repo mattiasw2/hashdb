@@ -79,19 +79,22 @@
      (when arg1# (~f arg1#))))
 
 
-(s/def ::datetime (dev-with-gen #(instance? java.util.Date %)
+(s/def ::datetime (dev-with-gen #(or
+                                  ;; mysql select returns joda-time
+                                  (instance? org.joda.time.DateTime %)
+                                  (instance? java.util.Date %))
                                 #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
 
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/nilable (s/and string? #(<= (count %) 36))))
 (s/def ::entity (s/nilable keyword?))
-(s/def ::deleted int?)
+(s/def ::deleted boolean?)
 (s/def ::before map?)
 (s/def ::after map?)
 (s/def ::updated ::datetime)
 (s/def ::version (s/and int? pos?))
 (s/def ::parent (s/and int? #(>= % 0)))
-(s/def ::is_merge int?)
+(s/def ::is_merge boolean?)
 (s/def ::userid (s/nilable ::uuid-str))
 (s/def ::sessionid (s/nilable ::uuid-str))
 (s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
@@ -126,7 +129,7 @@
 
 (if-not (:dev env)
   (s/def ::data
-    (s/map-of ::key any?))
+    (s/map-of keyword? any?))
   (do
     (s/def ::s1 string?)
     (s/def ::s2 string?)
@@ -137,7 +140,7 @@
     (s/def ::indexed-data
       (s/keys :opt-un [::s1 ::s2 ::s3 ::s4 ::i1 ::i2]))
     (s/def ::data
-      (s/merge (s/map-of ::key any?) ::indexed-data))))
+      (s/merge (s/map-of keyword? any?) ::indexed-data))))
 
 
 (s/def ::stored-latest
@@ -152,11 +155,11 @@
   (s/keys :req-un [::id ::deleted ::updated ::version ::parent]
           :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
 
-(s/fdef create
+(s/fdef create!
         :args (s/cat :m ::data)
         :ret ::stored-latest)
 
-(defn create
+(defn create!
   "Insert map `m` into db.
    If `:id` is in `m`, use it, otherwise create one.
    Return the map incl the potentially created id."
@@ -258,11 +261,11 @@
        (cmd/select-all-latest-null-entity {})))
 
 
-(s/fdef update
+(s/fdef update!
         :args (s/cat :m ::stored-latest :changes ::data)
         :ret ::stored-latest)
 
-(defn update
+(defn update!
   "Map `m` is the one currently stored in the db.
    The map `changes` contains the fields that should be updated.
    Return the new map, or throw exception if update fails."
@@ -311,23 +314,23 @@
   (into {} (clojure.set/difference (into #{} m-new) (into #{} m-old))))
 
 
-(s/fdef update-diff
+(s/fdef update-diff!
         :args (s/cat :m ::stored-latest :changes ::data)
         :ret ::stored-latest)
 
 
-(defn update-diff
+(defn update-diff!
   "Find the differences made and then update db."
   [m-old m-new]
   (let [changes (map-difference m-new m-old)]
-    (update m-old changes)))
+    (update! m-old changes)))
 
 
-(s/fdef delete
+(s/fdef delete!
         :args (s/cat :m ::data)
         :ret nil?)
 
-(defn delete
+(defn delete!
   "Delete the row for `m`.
    We do not care if anyone has updated or deleted the row just before.
    Will leave a perfect history."
@@ -345,11 +348,11 @@
       nil)))
 
 
-(s/fdef delete-by-id-with-minimum-history
+(s/fdef delete-by-id-with-minimum-history!
         :args (s/cat :id string?)
         :ret nil?)
 
-(defn delete-by-id-with-minimum-history
+(defn delete-by-id-with-minimum-history!
   "Delete the row `id`.
    The last history entry will not be optimal.
    Workaround, read the record first, use delete-by-id.
@@ -366,11 +369,11 @@
       nil)))
 
 
-(s/fdef delete-by-id
+(s/fdef delete-by-id!
         :args (s/cat :id ::uuid-str)
         :ret nil?)
 
-(defn delete-by-id
+(defn delete-by-id!
   "Delete the row `id`.
    Make sure history is perfect by reading the record first.
    We do not care if anyone has updated or deleted the row just before."
