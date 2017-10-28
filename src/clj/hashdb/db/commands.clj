@@ -39,37 +39,63 @@
 
 ;; (s/fdef fsome
 ;;         :args (s/cat :form (s/cat :f symbol? :arg1 some?)) ; cannot use fn? since not parsed as function yet.
-;;         :ret (constantly true))
+;;         :ret any?)
+;; tips: http://blog.klipse.tech/clojure/2016/10/10/defn-args.html
+
+;; (s/def ::function-application (s/cat :f symbol? :arg1 any?))
 
 ;; I cannot undef the above spec, so I did like this for now
 (s/fdef fsome
-        :args (constantly true)
-        :ret  (constantly true))
+        :args any?
+        :ret  any?)
+
+;; (s/fdef fsome
+;;         :args (s/cat :arg1 ::function-application)
+;;         :ret  any?)
 
 ;; should be renamed to fwhen, since replacement of when.
 (defmacro fsome
   "Use like (fsome (f arg1)), which is same as (f arg1), except that if arg1 is nil, nil is returned."
   [[f arg1]]
+  ;; instead of using s/fdef, check clojure spec inside macro
+  (assert (and (s/valid? symbol? f)(s/valid? any? arg1)))
   `(let [arg1# ~arg1]
      (when arg1# (~f arg1#))))
 
 
-(s/def ::datetime #(instance? java.util.Date %))
+(s/def ::datetime (s/with-gen #(instance? java.util.Date %)
+                    #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
 
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/nilable (s/and string? #(<= (count %) 36))))
 (s/def ::entity (s/nilable keyword?))
 (s/def ::deleted int?)
-(s/def ::data (s/map-of keyword? (s/or :int int? :float float? :string string? :nil nil? :datetime ::datetime)))
 (s/def ::before map?)
 (s/def ::after map?)
-(s/def ::updated (constantly true))     ; should check that time
+(s/def ::updated ::datetime)
 (s/def ::version (s/and int? pos?))
 (s/def ::parent (s/and int? #(>= % 0)))
 (s/def ::is_merge int?)
 (s/def ::userid (s/nilable ::uuid-str))
 (s/def ::sessionid (s/nilable ::uuid-str))
 (s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
+
+;; the toplevel in our data should be a map with keywords. The rest we do
+;; not care about. Do not know is there is a any-spec that generates.
+;; YES any? solves it EXCEPT DATETIME
+;; (s/def ::myany
+;;   (s/or :int int?
+;;         :float float?
+;;         :string string?
+;;         :nil nil?
+;;         :datetime ::datetime
+;;         :boolean boolean?
+;;         :set set?
+;;         :map map?
+;;         :vector vector?
+;;         :seq seq?))
+(s/def ::data
+  (s/map-of keyword? any?))
 
 (s/def ::stored-latest
   (s/keys :req-un [::id ::updated ::version]
