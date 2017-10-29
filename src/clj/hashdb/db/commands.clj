@@ -15,6 +15,41 @@
             BatchUpdateException
             PreparedStatement]))
 
+
+;;; TODO: BUG: I have not properly thought about when to delete index-entries
+;;; TODO: BUG: I will do it too often, unless.
+;;; The original idea was like this: I send in a map + only the keys that needs to be changed
+;;; But then the question is how to delete map-entries? Most logical is to set them to nil.
+
+
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; mysql tips:
+;;; 1. subqueries are slow, but there is a trick:
+;;;    https://stackoverflow.com/questions/6135376/mysql-select-where-field-in-subquery-extremely-slow-why
+;;; 2. What is done i v6? Also shows different ways of doing it.
+;;;    https://www.scribd.com/document/2546837/New-Subquery-Optimizations-In-MySQL-6
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; generic functions
+
+;; (into {} (clojure.set/difference (into #{} {:a 1, :b 2, :d 4}) (into #{} {:a 2, :c 3, :d 4})))
+;; => {:b 2, :a 1}
+
+(s/fdef map-difference
+        :args (s/cat :m-new map? :m_old map?)
+        :ret map?)
+
+(defn- map-difference
+  "Remove all kv-pairs in `m-new` that already exists in `m-old`."
+  [m-new m-old]
+  (into {} (clojure.set/difference (into #{} m-new) (into #{} m-old))))
+
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; some spec-helpers
 
@@ -155,9 +190,15 @@
   (s/keys :req-un [::id ::deleted ::updated ::version ::parent]
           :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
 
+(s/def ::idx-type #{:string :long})
+
+(s/def ::idx-info
+  (s/tuple (s/map-of keyword? ::idx-type)
+           (s/coll-of keyword? :into #{})))
+
 (s/fdef indexes
         :args (s/cat :m ::data)
-        :ret (s/map-of keyword? #{:string :long}))
+        :ret  ::idx-info)
 
 ;; TODO: implement a function that returns this list.
 ;; TODO: For now, it is hard-coded
@@ -165,8 +206,9 @@
   "Depending on the entity and other fields in `m`, return the indexes.
    Only non-nil values will be indexed."
   [m]
-  {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
-   :i1 :long, :i2 :long})
+  (let [raw {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
+             :i1 :long, :i2 :long}]
+    [raw (into #{} (map key raw))]))
 
 
 ;; algorithm #1 for update-indexes!
@@ -179,15 +221,92 @@
 ;; optimization, if I want to use mult-insert, it is best if we loop per type,
 ;; i.e. first for :string, then for :int
 
+(s/fdef keep-difference-by-type
+        :args (s/cat :changes ::data :idx-info ::idx-info)
+        :ret  ::data)
+
+(defn keep-difference-by-type
+  "Only keep the changes keys that have indexes.
+   Group these by type, e.g. :string :int..."
+  [changes [idx-types idx-keys]]
+  (if-not changes {}
+          (let [changes-relevant (select-keys changes idx-keys)
+                changes-grouped  (group-by #(idx-types (key %)) changes-relevant)]
+            changes-grouped)))
+
+(s/def ::sql-op #{:create :update :delete})
+
+(s/fdef update-indexes-one-type!
+        :args (s/cat :sql-op ::sql-op :typ ::idx-type :m ::data
+                     :before (s/nilable ::data) :changes (s/nilable ::data))
+        :ret nil?)
+
+(defn update-indexes-one-type!
+  [sql-op typ m before changes]
+  (let [id (:id m)]
+    (cond (= :create sql-op)
+          (do
+            (assert (empty? before))
+            (if (= :string typ)
+              (doseq [[k v] changes]
+                ;; no point in adding nil:s to index
+                (if v (cmd/create-string-index! {:id id, :entity (pr-str k),
+                                                 :index_data (pr-str v)})))))
+          (= :update sql-op)
+          (let [keys-before (set (keys before))
+                keys-changes (set (keys changes))
+                became-nil (clojure.set/difference keys-before keys-changes)
+                should-be-updated (clojure.set/intersection keys-changes keys-before)
+                should-be-created (clojure.set/difference keys-changes keys-before)]
+            (if (= :string typ)
+              (do
+                (doseq [k became-nil]
+                  (cmd/delete-single-string-index! {:id id, :entity (pr-str k)}))
+
+                (doseq [k should-be-created]
+                  ;; no point in adding nil:s to index
+                  (assert (k changes))
+                  (cmd/create-string-index! {:id id, :entity (pr-str k),
+                                             :index_data (pr-str (k changes))}))
+                (doseq [k should-be-updated]
+                  ;; update to nil, same as deleting (but this case should not happen
+                  ;; since then changes will not fulfil ::data)
+                  (if (k changes)
+                    (cmd/update-string-index! {:id id, :entity (pr-str k),
+                                               :index_data (pr-str (k changes))})
+                    (cmd/delete-single-string-index! {:id id, :entity (pr-str k)})))))
+            nil)
+          (= :delete sql-op)
+          ;; for delete, we can just delete all index entries at once
+          ;; so actually unnecessary to see which exact keywords are indexed,
+          ;; just which type of indexes there are (no point deleting int-indexes
+          ;; there are none)
+          (do
+            (assert (empty? changes))
+            (if (= :string typ)
+              (cmd/delete-string-index! {:id id}))
+            nil))))
+
+
 (s/fdef update-indexes!
-        :args (s/cat :before ::data :after ::data)
+        :args (s/cat :sql-op ::sql-op :m ::data
+                     :before ::data :changes (s/nilable ::data))
         :ret nil?)
 
 (defn update-indexes!
   "Update all index entries that have been changed.
    If it is a new object, before should be empty.
-   If it is a delete, after should be empty."
-  [before after])
+   If it is a delete, changes should be nil."
+  [sql-op m before changes]
+  (let [idx-info (indexes m)
+        ;; (into {} actually unnecessary, but forced by specs
+        before-relevant (into {} (keep-difference-by-type before idx-info))
+        changes-relevant (into {} (keep-difference-by-type changes idx-info))]
+    (doseq [typ [:string :long]]
+      (update-indexes-one-type! sql-op typ m
+                                (typ before-relevant) (typ changes-relevant)))))
+
+
 
 
 (s/fdef create!
@@ -335,18 +454,6 @@
 
       data)))
 
-
-;; (into {} (clojure.set/difference (into #{} {:a 1, :b 2, :d 4}) (into #{} {:a 2, :c 3, :d 4})))
-;; => {:b 2, :a 1}
-
-(s/fdef map-difference
-        :args (s/cat :m-new map? :m_old map?)
-        :ret map?)
-
-(defn- map-difference
-  "Remove all kv-pairs in `m-new` that already exists in `m-old`."
-  [m-new m-old]
-  (into {} (clojure.set/difference (into #{} m-new) (into #{} m-old))))
 
 
 (s/fdef update-diff!

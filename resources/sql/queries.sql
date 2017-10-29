@@ -81,9 +81,14 @@ VALUES (:id, :entity, :index_data)
 -- :doc update an existing string index record
 UPDATE string_index
 SET index_data = :index_data
-WHERE id = :id
+WHERE id = :id and entity = :entity
 
 -- :name delete-string-index! :! :n
 -- :doc delete a string index given the id
 DELETE FROM string_index
 WHERE id = :id
+
+-- :name delete-single-string-index! :! :n
+-- :doc delete a string index given the id and entity
+DELETE FROM string_index
+WHERE id = :id and entity = :entity
