@@ -83,7 +83,7 @@
 ;;       (is (= 404 (:status response))))))
 
 
-(defn test-all-commands
+(deftest test-all-commands
   []
   (let [m1  (hashdb.db.commands/create! {:då "foo"})
         id1 (:id m1)
@@ -92,20 +92,18 @@
         m3  (hashdb.db.commands/create! {:gunnar "mattias"})
         id3 (:id m3)]
     (hashdb.db.commands/update! (hashdb.db.commands/get id1) {:bar "foo"})
-    (let [m2-1 (hashdb.db.commands/get id2)]
-      (hashdb.db.commands/update-diff! m2-1 (into m2-1 {:uppsala 20 :sundsvall 30})))
-    (hashdb.db.commands/delete-by-id! id2)
-    (hashdb.db.commands/delete! (hashdb.db.commands/get id1))
-    (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:bar "foo", :gunnar "lena"})
-    (hashdb.db.commands/delete-by-id-with-minimum-history! id3)
-    (println "m1")
-    (clojure.pprint/pprint (hashdb.db.commands/history id1))
-    (println "m2")
-    (clojure.pprint/pprint (hashdb.db.commands/history id2))
-    (println "m2-short")
-    (clojure.pprint/pprint (hashdb.db.commands/history-short id2))
+    (let [m2-1 (hashdb.db.commands/get id2)
+          res2 (hashdb.db.commands/update-diff! m2-1 (into m2-1 {:uppsala 20 :sundsvall 30}))]
+      (is (= 30 (:sundsvall res2))))
+    (is (nil? (hashdb.db.commands/delete-by-id! id2)))
+    (is (nil? (hashdb.db.commands/delete! (hashdb.db.commands/get id1))))
+    (is (= "lena" (:gunnar (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:bar "foo", :gunnar "lena"}))))
+    (is (nil? (hashdb.db.commands/delete-by-id-with-minimum-history! id3)))
+    (is (= 3 (count (hashdb.db.commands/history id1))))
+    (is (= 3 (count (hashdb.db.commands/history id2))))
+    (is (= 3 (count (hashdb.db.commands/history-short id2))))
     (println "m3")
-    (clojure.pprint/pprint (take 10 (hashdb.db.commands/history-nil-entity)))))
+    (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity)))))))
 
 
 ;; bugs:
