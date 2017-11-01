@@ -88,16 +88,8 @@ UPDATE index_data = :index_data
 -- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
 -- https://dev.mysql.com/doc/refman/5.5/en/insert-on-duplicate.html
 
--- :name upsert-string-index-not-working! :! :n
--- :doc create or update an existing string index record
--- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
-INSERT INTO string_index
-(id, entity, index_data)
-VALUES (:id, :entity, :index_data)
-ON DUPLICATE KEY UPDATE string_index
-SET index_data = :index_data
 
--- :name upsert-string-index-not-working-2! :! :n
+-- :name upsert-string-index-using-replace! :! :n
 -- :doc create or update an existing string index record
 -- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
 REPLACE INTO string_index
