@@ -1,2 +1,2 @@
 ALTER TABLE `string_index`
-DROP index prim;
+DROP PRIMARY KEY;

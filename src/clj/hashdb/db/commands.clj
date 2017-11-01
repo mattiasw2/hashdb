@@ -21,6 +21,8 @@
 ;;; The original idea was like this: I send in a map + only the keys that needs to be changed
 ;;; But then the question is how to delete map-entries? Most logical is to set them to nil.
 
+;;; TODO: add :k column to string_index, and use entity for entity, since it will
+;;; TODO: improve lookups if same key used in many different entities (like SSS's frm)
 
 
 
@@ -299,9 +301,8 @@
    If it is a delete, changes should be nil."
   [sql-op m before changes]
   (let [idx-info (indexes m)
-        ;; (into {} actually unnecessary, but forced by specs
-        before-relevant (into {} (keep-difference-by-type before idx-info))
-        changes-relevant (into {} (keep-difference-by-type changes idx-info))]
+        before-relevant (keep-difference-by-type before idx-info)
+        changes-relevant (keep-difference-by-type changes idx-info)]
     (doseq [typ [:string :long]]
       (update-indexes-one-type! sql-op typ m
                                 (typ before-relevant) (typ changes-relevant)))))

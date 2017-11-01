@@ -116,6 +116,17 @@
 
 
 (deftest cycle-string-index-operations
-  (is (= 1 (hashdb.db.core/create-string-index! {:id "hejsan" :entity nil, :index_data "foo"})))
-  (is (= 1 (hashdb.db.core/update-string-index! {:id "hejsan" :index_data "bar"})))
-  (is (= 1 (hashdb.db.core/delete-string-index! {:id "hejsan"}))))
+  (let [id (uuid)
+        entity ":nil"]
+    (is (= 1 (hashdb.db.core/create-string-index! {:id id :entity entity :index_data "foo"})))
+    (is (= 1 (hashdb.db.core/update-string-index! {:id id :entity entity :index_data "bar"})))
+    (is (= 1 (hashdb.db.core/delete-string-index! {:id id :entity entity})))))
+
+
+(deftest cycle-string-index-operations-upsert
+  (let [id (uuid)
+        entity ":nil"]
+    (is (= 1 (hashdb.db.core/upsert-string-index! {:id id :entity entity :index_data "foo"})))
+    ;; Here you get a 2 rows affected, the first is the failed insert, the 2nd the update
+    (is (= 2 (hashdb.db.core/upsert-string-index! {:id id :entity entity :index_data "bar"})))
+    (is (= 1 (hashdb.db.core/delete-string-index! {:id id :entity entity})))))
