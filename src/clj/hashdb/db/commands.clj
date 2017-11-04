@@ -10,7 +10,8 @@
    [clojure.spec.gen.alpha :as gen]
    [clojure.spec.test.alpha :as stest2]
    [orchestra.spec.test]
-   [mw.std :refer :all])
+   [mw.std :refer :all]
+   [qbits.tardis :as qbits])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
@@ -123,8 +124,8 @@
                                 #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
 
 (s/def ::id ::uuid-str)
-(s/def ::entity-str (s/nilable (s/and string? #(<= (count %) 36))))
-(s/def ::entity (s/nilable keyword?))
+(s/def ::entity-str (s/and string? #(<= (count %) 36)))
+(s/def ::entity keyword?)
 (s/def ::deleted boolean?)
 (s/def ::before map?)
 (s/def ::after map?)
@@ -181,16 +182,16 @@
 
 
 (s/def ::stored-latest
-  (s/keys :req-un [::id ::updated ::version]
-          :opt-un [::entity]))
+  (s/keys :req-un [::id ::entity ::updated ::version]
+          :opt-un []))
 
 (s/def ::stored-history
-  (s/keys :req-un [::id ::deleted ::before ::after ::updated ::version ::parent]
-          :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
+  (s/keys :req-un [::id ::entity ::deleted ::before ::after ::updated ::version ::parent]
+          :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
 (s/def ::stored-history-short
-  (s/keys :req-un [::id ::deleted ::updated ::version ::parent]
-          :opt-un [::entity ::is_merge ::userid ::sessionid ::comment]))
+  (s/keys :req-un [::id  ::entity ::deleted ::updated ::version ::parent]
+          :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
 (s/def ::idx-type #{:string :long})
 
@@ -320,12 +321,11 @@
    Return the map incl the potentially created id."
   [m]
   (let [id0        (or (:id m) (uuid))
-        entity     (:entity m)
-        entity-str (fsome (pr-str entity))
+        entity     (or (:entity m) :unknown)
+        entity-str (pr-str entity)
         now0       (now)
         version    1
-        m0         (into m {:id id0 :updated now0 :version version})
-        m          (if entity (assoc m0 :entity entity) m0)
+        m          (into m {:id id0 :updated now0 :version version :entity entity})
         data       (pr-str m)]
     (sql/with-db-transaction [conn *db*]
       (cmd/create-latest! conn
@@ -344,9 +344,7 @@
   [row m]
   (assert (and (= (:id row)(:id m))
                (= (:version row)(:version m))
-               (if (:entity row)
-                 (= (:entity row)(pr-str (:entity m)))
-                 (nil? (:entity m))))
+               (= (:entity row)(pr-str (:entity m))))
           "id, entity, and/or version and data columns in table latest are not in sync.")
   m)
 
@@ -395,14 +393,14 @@
 
 
 (s/fdef select-all-by-entity
-        :args (s/cat :entity keyword?)
+        :args (s/cat :entity ::entity)
         :ret (s/* ::stored-latest))
 
 (defn select-all-by-entity
   "Return all rows for a given `entity`."
   [entity]
   (map #(try-get-internal (:id %) %)
-       (cmd/select-all-latest-by-entity {:entity (fsome (pr-str entity))})))
+       (cmd/select-all-latest-by-entity {:entity (pr-str entity)})))
 
 
 (s/fdef select-all-nil-entity
@@ -412,8 +410,7 @@
 (defn select-all-nil-entity
   "Return all rows for unknown `entity`."
   []
-  (map #(try-get-internal (:id %) %)
-       (cmd/select-all-latest-null-entity {})))
+  (select-all-nil-entity :unknown))
 
 
 (s/fdef update!
@@ -436,7 +433,7 @@
         before     (select-keys m (keys changes))
         data       (into (into m changes) {:updated updated :version version})
         data-str   (pr-str data)
-        entity-str (fsome (pr-str (:entity m)))]
+        entity-str (pr-str (:entity m))]
     (sql/with-db-transaction [conn *db*]
       (let [affected (cmd/update-latest! conn {:id id :parent parent :updated updated :version version :data data-str})]
         (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
@@ -481,7 +478,7 @@
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
   (sql/with-db-transaction [conn *db*]
     (let [affected   (cmd/delete-latest! conn m)
-          entity-str (fsome (pr-str (:entity m)))]
+          entity-str (pr-str (:entity m))]
       (cmd/create-history! conn
                            {:id       (:id m),    :entity    entity-str,         :deleted 1,
                             :before   (pr-str m), :after     "{}",
@@ -504,11 +501,11 @@
   (sql/with-db-transaction [conn *db*]
     (let [affected (cmd/delete-latest! conn {:id id})]
       (cmd/create-history! conn
-                           {:id       id,    :entity    nil,        :deleted 1,
+                           {:id       id,    :entity    (pr-str :unknown), :deleted 1,
                             :before   "{}",  :after     "{}",
-                            :updated  (now), :version   2000000001, :parent  2000000000,
+                            :updated  (now), :version   2000000001,        :parent  2000000000,
                             :is_merge 0,
-                            :userid   nil,   :sessionid nil,        :comment nil})
+                            :userid   nil,   :sessionid nil,               :comment nil})
       nil)))
 
 
@@ -526,11 +523,11 @@
       (let [affected (cmd/delete-latest! conn {:id (:id m)})
             version  (:version m)]
         (cmd/create-history! conn
-                             {:id       (:id m),    :entity    (fsome (pr-str (:entity m))), :deleted 1,
+                             {:id       (:id m),    :entity    (pr-str (:entity m)), :deleted 1,
                               :before   (pr-str m), :after     "{}",
-                              :updated  (now),      :version   (inc version),                :parent  version,
+                              :updated  (now),      :version   (inc version),        :parent  version,
                               :is_merge 0,
-                              :userid   nil,        :sessionid nil,                          :comment nil})
+                              :userid   nil,        :sessionid nil,                  :comment nil})
         nil))))
 
 (defn- deserialize-history
@@ -538,7 +535,7 @@
   [m]
   (into m {:after (clojure.edn/read-string (:after m))
            :before (clojure.edn/read-string (:before m))
-           :entity (fsome (clojure.edn/read-string (:entity m)))}))
+           :entity (clojure.edn/read-string (:entity m))}))
 
 
 (s/fdef history
@@ -552,24 +549,24 @@
 
 
 (s/fdef history-by-entity
-        :args (s/cat :entity keyword?)
+        :args (s/cat :entity ::entity)
         :ret  (s/* ::stored-history))
 
 
 (defn history-by-entity
   "Get the complete history for all entities of `entity`."
   [entity]
-  (map deserialize-history (cmd/select-history-by-entity {:entity (fsome (pr-str entity))})))
+  (map deserialize-history (cmd/select-history-by-entity {:entity (pr-str entity)})))
 
 
-(s/fdef history-nill-entity
+(s/fdef history-nil-entity
         :args (s/cat)
         :ret  (s/* ::stored-history))
 
 (defn history-nil-entity
-  "Get the complete history for all entities of `entity`."
+  "Get the complete history for all :unknown entities."
   []
-  (map deserialize-history (cmd/select-history-null-entity {})))
+  (history-by-entity :unknown))
 
 
 ;; this operation is most likely much faster for long histories since:
@@ -584,6 +581,6 @@
   "Get the complete history for `id`, but do not read :before and :after.
    Used to present who changed anything for this object."
   [id]
-  (cmd/select-history-short {:id id}))
+  (map deserialize-history (cmd/select-history-short {:id id})))
 
 (orchestra.spec.test/instrument)

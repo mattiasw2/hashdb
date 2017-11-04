@@ -1,6 +1,6 @@
 CREATE TABLE `history`
 (`id` VARCHAR(36) NOT NULL,
- `entity` VARCHAR(36) NULL DEFAULT NULL,
+ `entity` VARCHAR(36) NOT NULL,
  `deleted` BOOLEAN NOT NULL,
 -- before {} after first insert
  `before` TEXT(30000) NOT NULL,

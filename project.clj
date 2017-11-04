@@ -31,6 +31,9 @@
                  [ring/ring-core "1.6.2"]
                  [ring/ring-defaults "0.3.1"]
 
+                 ;; I like timeuuid, since then clustered index works
+                 [cc.qbits/tardis "1.1.0"]
+
                  ;; make instrumentation check :ret and :fn too
                  [orchestra "2017.08.13"]
 
