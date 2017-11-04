@@ -309,8 +309,6 @@
                                 (typ before-relevant) (typ changes-relevant)))))
 
 
-
-
 (s/fdef create!
         :args (s/cat :m ::data)
         :ret ::stored-latest)
@@ -337,6 +335,7 @@
                             :userid   nil,  :sessionid nil,        :comment nil})
       m)))
 
+
 (defn- verify-row-in-sync
   "Make sure db `row` is in sync with `m` from the :data column.
    Currently, only :id and :version are verified, since if these arr
@@ -347,6 +346,7 @@
                (= (:entity row)(pr-str (:entity m))))
           "id, entity, and/or version and data columns in table latest are not in sync.")
   m)
+
 
 (defn- try-get-internal
   "Return map at `id`, null if not found."
@@ -458,7 +458,6 @@
         :args (s/cat :m ::stored-latest :changes ::data)
         :ret ::stored-latest)
 
-
 (defn update-diff!
   "Find the differences made and then update db."
   [m-old m-new]
@@ -552,7 +551,6 @@
         :args (s/cat :entity ::entity)
         :ret  (s/* ::stored-history))
 
-
 (defn history-by-entity
   "Get the complete history for all entities of `entity`."
   [entity]
@@ -570,7 +568,7 @@
 
 
 ;; this operation is most likely much faster for long histories since:
-;; 1. no deserialization
+;; 1. no deserialization of :data
 ;; 2. InnoDB puts only 767 bytes of a TEXT or BLOB inline, the rest goes into some other block.
 ;;    This is a compromise that sometimes helps, sometimes hurts performance.
 (s/fdef history-short
