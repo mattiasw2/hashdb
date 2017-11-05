@@ -665,12 +665,19 @@
              (empty? (map-difference idxs-as-map idx-values))))
       (zero? (count idxs)))))
 
+
+(defn verify-these
+  "Verify these `ids`."
+  [ids]
+  (doseq [id ids]
+    (when-not (verify-stored-data id)
+      (println (str id " not ok")))))
+
+
 (defn verify-all-stored-data
   "Read all database and verify it."
   []
-  (let [all (map :id (cmd/select-all-latest))]
-    (doseq [id all]
-      (when-not (verify-stored-data id)
-        (println (str id " not ok"))))))
+  (let [ids (map :id (cmd/select-all-latest))]
+    (verify-these ids)))
 
 (orchestra.spec.test/instrument)

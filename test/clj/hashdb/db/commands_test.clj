@@ -65,18 +65,53 @@
 ;; hashdb.db.commands-test> "Timed:  doseq: 7902.750535 msecs"
 ;; "Timed:  doseq: 7708.286371 msecs"
 
+(defn clear-database
+  "Clear the database by reconstructing it from scratch."
+  []
+  (doseq [x (range 10)] (user/rollback))
+  (user/migrate))
+
+(defn- test-many-continue
+  [samples]
+  (let [saved-m2s (timed "create!" (mapv create! samples))
+        ids (map :id saved-m2s)
+        _ (hashdb.db.commands/verify-these ids)
+        saved-m3s (timed "update" (mapv #(update! % {:hej "mattias"}) saved-m2s))
+        _ (hashdb.db.commands/verify-these ids)
+        saved-m4s (timed "delete" (mapv #(delete! %) saved-m3s))
+        _ (hashdb.db.commands/verify-these ids)]))
 
 (defn test-many
-  [n]
-  (doseq [x (range 10)] (user/rollback))
-  (user/migrate)
-  (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data n))))
-  (timed "create!" (def saved-m2s (mapv create! m2s)))
-  (hashdb.db.commands/verify-all-stored-data)
-  (timed "update" (def saved-m3s (mapv #(update! % {:hej "mattias"}) saved-m2s)))
-  (hashdb.db.commands/verify-all-stored-data)
-  (timed "delete" (def saved-m4s (mapv #(delete! %) saved-m3s)))
-  (hashdb.db.commands/verify-all-stored-data))
+  [& [n]]
+  (clear-database)
+  (let [n (or n 1000)
+        samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
+    (test-many-continue samples)))
+
+;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+;; in create!
+;; when running (test-many-parallel :n 100 :par 10 :delay 2000)
+;; and (test-many-parallel :n 100 :par 10 :delay 500)  on the 9th thread doing create!
+(defn test-many-parallel
+  [& {:keys [n par delay]
+      :or {n 1000
+           par 2
+           delay 2000}}]
+  (let [n (or n 1000)
+        samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
+    (clear-database)
+    (->>
+     (range par)
+     (mapv (fn [_]
+             (Thread/sleep delay)
+             (future (test-many-continue samples))))
+     (mapv deref))
+    (println "Finished")))
+
+
+
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; with string_index and without transactions
