@@ -173,10 +173,12 @@
     (s/def ::s2 string?)
     (s/def ::s3 string?)
     (s/def ::s4 string?)
-    (s/def ::i1 int?)
-    (s/def ::i2 int?)
+    ;; (s/def ::i1 int?)
+    ;; (s/def ::i2 int?)
     (s/def ::indexed-data
-      (s/keys :opt-un [::s1 ::s2 ::s3 ::s4 ::i1 ::i2]))
+      (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
+                       ;; ::i1 ::i2
+                       ::s4]))
     (s/def ::data
       (s/merge (s/map-of keyword? any?) ::indexed-data))))
 
@@ -660,5 +662,13 @@
              (= (count idxs) (count idx-values))
              (empty? (map-difference idxs-as-map idx-values))))
       (zero? (count idxs)))))
+
+(defn verify-all-stored-data
+  "Read all database and verify it."
+  []
+  (let [all (map :id (cmd/select-all-latest))]
+    (doseq [id all]
+      (when-not (verify-stored-data id)
+        (println (str id " not ok"))))))
 
 (orchestra.spec.test/instrument)

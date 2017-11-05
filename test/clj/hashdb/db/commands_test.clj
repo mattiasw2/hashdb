@@ -65,6 +65,25 @@
 ;; hashdb.db.commands-test> "Timed:  doseq: 7902.750535 msecs"
 ;; "Timed:  doseq: 7708.286371 msecs"
 
+;; added string_index
+
+;; (timed "create!" (def saved-m2s (mapv create! m2s)))
+;; "Timed: create! : 22377.920439 msecs"
+;; #'hashdb.db.commands-test/saved-m2s
+;; hashdb.db.commands-test> (hashdb.db.commands/verify-all-stored-data)
+;; nil
+;; hashdb.db.commands-test> (timed "update" (def saved-m3s (mapv #(update! % {:hej "mattias"}) saved-m2s)))
+;; "Timed: update : 10550.93422 msecs"
+;; #'hashdb.db.commands-test/saved-m3s
+;; hashdb.db.commands-test> (hashdb.db.commands/verify-all-stored-data)
+;; nil
+;; hashdb.db.commands-test> (timed "delete" (def saved-m4s (mapv #(delete! %) saved-m3s)))
+;; "Timed: delete : 13877.962908 msecs"
+;; #'hashdb.db.commands-test/saved-m4s
+;; hashdb.db.commands-test> (hashdb.db.commands/verify-all-stored-data)
+;; nil
+
+
 
 
 ;; (doseq [m (s/exercise map? 1000)] (create! (first m)))
