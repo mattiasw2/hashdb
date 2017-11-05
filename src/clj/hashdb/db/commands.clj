@@ -257,16 +257,18 @@
 
 
 (defn- update-indexes-one-type-create!
-  [before typ changes id entity]
+  [conn before typ changes id entity]
   (assert (empty? before))
   (if (= :string typ)
     (doseq [[k v] changes]
       ;; no point in adding nil:s to index
-      (if v (cmd/create-string-index! {:id id, :entity (str-edn entity), :k (str-edn k),
-                                       :index_data (str-index v)})))))
+      (if v (cmd/create-string-index!
+             conn
+             {:id id, :entity (str-edn entity), :k (str-edn k),
+              :index_data (str-index v)})))))
 
 (defn- update-indexes-one-type-update!
-  [before changes typ id entity]
+  [conn before changes typ id entity]
   (let [keys-before (set (keys before))
         keys-changes0 (set (keys changes))
         disappeared(clojure.set/difference keys-before keys-changes0)
@@ -281,21 +283,21 @@
       (doseq [[k v] map-deleted]
         ;; v = nil means deleted
         (assert (nil? v))
-        (let [res (cmd/delete-single-string-index! {:id id, :entity (str-edn entity), :k (str-edn k)})]
+        (let [res (cmd/delete-single-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)})]
           (assert (= 1 res))))
 
       (doseq [k should-be-created]
         ;; no point in adding nil:s to index, so should never happen, even if has nil value
         (assert (k changes))
-        (let [res (cmd/create-string-index! {:id id, :entity (str-edn entity), :k (str-edn k)
-                                             :index_data (str-index (k changes))})]
+        (let [res (cmd/create-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)
+                                                  :index_data (str-index (k changes))})]
           (assert (= 1 res))))
       (doseq [k should-be-updated]
         ;; update to nil, same as deleting (but this case should not happen
         ;; since then changes will not fulfil ::data)
         (assert (k changes))
-        (cmd/update-string-index! {:id id, :entity (str-edn entity), :k (str-edn k)
-                                   :index_data (str-index (k changes))}))))
+        (cmd/update-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)
+                                        :index_data (str-index (k changes))}))))
   nil)
 
 ;; for delete, we can just delete all index entries at once
@@ -303,34 +305,34 @@
 ;; just which type of indexes there are (no point deleting int-indexes
 ;; there are none)
 (defn- update-indexes-one-type-delete!
-  [changes typ id]
+  [conn changes typ id]
   (assert (empty? changes))
   (if (= :string typ)
-    (cmd/delete-string-index! {:id id}))
+    (cmd/delete-string-index! conn {:id id}))
   nil)
 
 
 (s/def ::sql-op #{:create :update :delete})
 
 (s/fdef update-indexes-one-type!
-        :args (s/cat :sql-op ::sql-op :typ ::idx-type :m ::data
+        :args (s/cat :conn any? :sql-op ::sql-op :typ ::idx-type :m ::data
                      :before (s/nilable ::data) :changes (s/nilable ::data))
         :ret nil?)
 
 (defn update-indexes-one-type!
-  [sql-op typ m before changes]
+  [conn sql-op typ m before changes]
   (let [id (:id m)
         entity (:entity m)]
     (cond (= :create sql-op)
-          (update-indexes-one-type-create! before typ changes id entity)
+          (update-indexes-one-type-create! conn before typ changes id entity)
           (= :update sql-op)
-          (update-indexes-one-type-update! before changes typ id entity)
+          (update-indexes-one-type-update! conn before changes typ id entity)
           (= :delete sql-op)
-          (update-indexes-one-type-delete! changes typ id))))
+          (update-indexes-one-type-delete! conn changes typ id))))
 
 
 (s/fdef update-indexes!
-        :args (s/cat :sql-op ::sql-op :m ::data
+        :args (s/cat :conn any? :sql-op ::sql-op :m ::data
                      :before ::data :changes (s/nilable ::data))
         :ret nil?)
 
@@ -338,25 +340,25 @@
   "Update all index entries that have been changed.
    If it is a new object, before should be empty.
    If it is a delete, changes should be nil."
-  [sql-op m before changes]
+  [conn sql-op m before changes]
   (let [idx-info         (indexes m)
         before-relevant  (keep-difference-by-type before idx-info)
         changes-relevant (keep-difference-by-type changes idx-info)]
     (doseq [typ [:string :long]]
-      (update-indexes-one-type! sql-op typ m
+      (update-indexes-one-type! conn sql-op typ m
                                 (typ before-relevant) (typ changes-relevant)))))
 
 
 (s/fdef delete-indexes-without-data!
-        :args (s/cat :id ::id)
+        :args (s/cat :conn any? :id ::id)
         :ret nil?)
 
 ;; do not know which indexes to delete, i.e. has to look everywhere
 (defn delete-indexes-without-data!
   "Delete all index entries."
-  [id]
+  [conn id]
   (doseq [typ [:string :long]]
-    (update-indexes-one-type-delete! {} typ id)))
+    (update-indexes-one-type-delete! conn {} typ id)))
 
 
 (s/fdef create!
@@ -383,7 +385,7 @@
                             :updated  now0, :version   version,    :parent  0,
                             :is_merge 0,
                             :userid   nil,  :sessionid nil,        :comment nil})
-      (update-indexes! :create m {} m)
+      (update-indexes! conn :create m {} m)
       m)))
 
 
@@ -500,7 +502,7 @@
                               :updated  updated,          :version   version,    :parent  parent,
                               :is_merge 0,
                               :userid   nil,              :sessionid nil,        :comment nil})
-        (update-indexes! :update m before changes))
+        (update-indexes! conn :update m before changes))
       data)))
 
 
@@ -535,7 +537,7 @@
                             :updated  (now),       :version   (inc (:version m)), :parent  (:version m),
                             :is_merge 0,
                             :userid   nil,         :sessionid nil,                :comment nil})
-      (update-indexes! :delete m m {})
+      (update-indexes! conn :delete m m {})
       nil)))
 
 
@@ -557,7 +559,7 @@
                             :updated  (now),         :version   2000000001,         :parent  2000000000,
                             :is_merge 0,
                             :userid   nil,           :sessionid nil,                :comment nil})
-      (delete-indexes-without-data! id)
+      (delete-indexes-without-data! conn id)
       nil)))
 
 
@@ -580,7 +582,7 @@
                               :updated  (now),       :version   (inc version),         :parent  version,
                               :is_merge 0,
                               :userid   nil,         :sessionid nil,                   :comment nil})
-        (delete-indexes-without-data! id)
+        (delete-indexes-without-data! conn id)
         nil))))
 
 (defn- deserialize-history

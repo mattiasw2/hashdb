@@ -66,11 +66,11 @@
 ;; "Timed:  doseq: 7708.286371 msecs"
 
 
-(defn test-1000
-  []
+(defn test-many
+  [n]
   (doseq [x (range 10)] (user/rollback))
   (user/migrate)
-  (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+  (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data n))))
   (timed "create!" (def saved-m2s (mapv create! m2s)))
   (hashdb.db.commands/verify-all-stored-data)
   (timed "update" (def saved-m3s (mapv #(update! % {:hej "mattias"}) saved-m2s)))
@@ -79,11 +79,19 @@
   (hashdb.db.commands/verify-all-stored-data))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; with string_index
+;; with string_index and without transactions
 ;; "Timed: exercise : 75463.495381 msecs"
 ;; "Timed: create! : 21870.207466 msecs"
 ;; "Timed: update : 10089.15617 msecs"
 ;; "Timed: delete : 13598.558028 msecs"
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; with transactions, no speed difference except create!, which is faster.
+;; "Timed: exercise : 74817.655669 msecs"
+;; "Timed: create! : 15552.223304 msecs"
+;; "Timed: update : 10360.828127 msecs"
+;; "Timed: delete : 11096.798229 msecs"
+
 
 
 
