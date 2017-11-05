@@ -214,13 +214,15 @@
     [raw (into #{} (map key raw))]))
 
 ;; for edn, we need to use pr-str
-(def ^{:static true} str-edn pr-str)
+;; :static true is actually a no-op, it is dynamic that is needed.
+;;(def ^{:static true} str-edn pr-str)
+(def str-edn pr-str)
 
 ;; but for str-index, we do not want quotes around and similar
-(def ^{:static true} str-index str)
+(def str-index str)
 
-;; mattias stupid performance
-(def ^{:static true} empty-map-edn (str-edn {}))
+;; mattias premature performance optimization :-)
+(def empty-map-edn (str-edn {}))
 
 ;; algorithm #1 for update-indexes!
 ;; 1. keep only fields in before and after that have indexes
@@ -629,5 +631,32 @@
    Used to present who changed anything for this object."
   [id]
   (map deserialize-history (cmd/select-history-short {:id id})))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; validation of database
+;;;
+;;; step 1: ensure latest and index are in sync
+
+(s/fdef verify-stored-data
+        :args (s/cat :id ::id)
+        :ret  boolean?)
+
+(defn verify-stored-data
+  "Make sure the `m` with `id` is correctly and completely stored.
+   If not, print out warning and return false."
+  [id]
+  (let [m           (try-get id)
+        idxs        (cmd/select-string-index {:id id})
+        idxs-as-map (into {} (map (fn [idx] [(clojure.edn/read-string (:entity idx))(:index_data idx)]) idxs))]
+    (if m
+      (let [idx-info    (indexes m)
+            idx-values  (select-keys m (second idx-info))
+            diff        (keep-difference-by-type m idx-info)]
+        (and (= (count idxs) (count idxs-as-map))
+             (= (count idxs) (count idx-values))
+             (empty? (map-difference idxs-as-map idx-values))))
+      (zero? (count idxs)))))
 
 (orchestra.spec.test/instrument)
