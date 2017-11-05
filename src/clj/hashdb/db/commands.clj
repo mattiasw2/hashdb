@@ -224,6 +224,12 @@
 ;; optimization, if I want to use mult-insert, it is best if we loop per type,
 ;; i.e. first for :string, then for :int
 
+(defn mapify-values
+  "(mapify-values {:1 [[:a :b][:c :d]] :2 [[:e :f]]}))
+   ==> {:1 {:a :b, :c :d}, :2 {:e :f}}"
+  [m]
+  (into {} (map (fn [[k v]] [k (into {} v)]) m)))
+
 (s/fdef keep-difference-by-type
         :args (s/cat :changes ::data :idx-info ::idx-info)
         :ret  ::data)
@@ -234,8 +240,63 @@
   [changes [idx-types idx-keys]]
   (if-not changes {}
           (let [changes-relevant (select-keys changes idx-keys)
-                changes-grouped  (group-by #(idx-types (key %)) changes-relevant)]
+                changes-grouped  (mapify-values (group-by #(idx-types (key %)) changes-relevant))]
             changes-grouped)))
+
+
+(defn- update-indexes-one-type-create!
+  [before typ changes id]
+  (assert (empty? before))
+  (if (= :string typ)
+    (doseq [[k v] changes]
+      ;; no point in adding nil:s to index
+      (if v (cmd/create-string-index! {:id id, :entity (pr-str k),
+                                       :index_data (pr-str v)})))))
+
+(defn- update-indexes-one-type-update!
+  [before changes typ id]
+  (let [keys-before (set (keys before))
+        keys-changes0 (set (keys changes))
+        disappeared(clojure.set/difference keys-before keys-changes0)
+        _ (assert (empty? disappeared) (str "Illegal update, the following keys needs to be part of changes" (str disappeared)))
+        tmp (group-by #(nil? (second %)) changes)
+        map-changes (clojure.core/get tmp false)
+        map-deleted (clojure.core/get tmp true)
+        key-changes (keys map-changes)
+        should-be-updated (clojure.set/intersection (set key-changes) keys-before)
+        should-be-created (clojure.set/difference (set (keys map-changes)) keys-before)]
+    (when (= :string typ)
+      (doseq [[k v] map-deleted]
+        ;; v = nil means deleted
+        (assert (nil? v))
+        (let [res (cmd/delete-single-string-index! {:id id, :entity (pr-str k)})]
+          (assert (= 1 res))))
+
+      (doseq [k should-be-created]
+        ;; no point in adding nil:s to index, so should never happen, even if has nil value
+        (assert (k changes))
+        (let [res (cmd/create-string-index! {:id id, :entity (pr-str k),
+                                             :index_data (pr-str (k changes))})]
+          (assert (= 1 res))))
+      (doseq [k should-be-updated]
+        ;; update to nil, same as deleting (but this case should not happen
+        ;; since then changes will not fulfil ::data)
+        (assert (k changes))
+        (cmd/update-string-index! {:id id, :entity (pr-str k),
+                                   :index_data (pr-str (k changes))}))))
+  nil)
+
+;; for delete, we can just delete all index entries at once
+;; so actually unnecessary to see which exact keywords are indexed,
+;; just which type of indexes there are (no point deleting int-indexes
+;; there are none)
+(defn- update-indexes-one-type-delete!
+  [changes typ id]
+  (assert (empty? changes))
+  (if (= :string typ)
+    (cmd/delete-string-index! {:id id}))
+  nil)
+
 
 (s/def ::sql-op #{:create :update :delete})
 
@@ -248,47 +309,11 @@
   [sql-op typ m before changes]
   (let [id (:id m)]
     (cond (= :create sql-op)
-          (do
-            (assert (empty? before))
-            (if (= :string typ)
-              (doseq [[k v] changes]
-                ;; no point in adding nil:s to index
-                (if v (cmd/create-string-index! {:id id, :entity (pr-str k),
-                                                 :index_data (pr-str v)})))))
+          (update-indexes-one-type-create! before typ changes id)
           (= :update sql-op)
-          (let [keys-before (set (keys before))
-                keys-changes (set (keys changes))
-                became-nil (clojure.set/difference keys-before keys-changes)
-                should-be-updated (clojure.set/intersection keys-changes keys-before)
-                should-be-created (clojure.set/difference keys-changes keys-before)]
-            (if (= :string typ)
-              (do
-                (doseq [k became-nil]
-                  (cmd/delete-single-string-index! {:id id, :entity (pr-str k)}))
-
-                (doseq [k should-be-created]
-                  ;; no point in adding nil:s to index
-                  (assert (k changes))
-                  (cmd/create-string-index! {:id id, :entity (pr-str k),
-                                             :index_data (pr-str (k changes))}))
-                (doseq [k should-be-updated]
-                  ;; update to nil, same as deleting (but this case should not happen
-                  ;; since then changes will not fulfil ::data)
-                  (if (k changes)
-                    (cmd/update-string-index! {:id id, :entity (pr-str k),
-                                               :index_data (pr-str (k changes))})
-                    (cmd/delete-single-string-index! {:id id, :entity (pr-str k)})))))
-            nil)
+          (update-indexes-one-type-update! before changes typ id)
           (= :delete sql-op)
-          ;; for delete, we can just delete all index entries at once
-          ;; so actually unnecessary to see which exact keywords are indexed,
-          ;; just which type of indexes there are (no point deleting int-indexes
-          ;; there are none)
-          (do
-            (assert (empty? changes))
-            (if (= :string typ)
-              (cmd/delete-string-index! {:id id}))
-            nil))))
+          (update-indexes-one-type-delete! changes typ id))))
 
 
 (s/fdef update-indexes!
@@ -301,12 +326,24 @@
    If it is a new object, before should be empty.
    If it is a delete, changes should be nil."
   [sql-op m before changes]
-  (let [idx-info (indexes m)
-        before-relevant (keep-difference-by-type before idx-info)
+  (let [idx-info         (indexes m)
+        before-relevant  (keep-difference-by-type before idx-info)
         changes-relevant (keep-difference-by-type changes idx-info)]
     (doseq [typ [:string :long]]
       (update-indexes-one-type! sql-op typ m
                                 (typ before-relevant) (typ changes-relevant)))))
+
+
+(s/fdef delete-indexes-without-data!
+        :args (s/cat :id ::id)
+        :ret nil?)
+
+;; do not know which indexes to delete, i.e. has to look everywhere
+(defn delete-indexes-without-data!
+  "Delete all index entries."
+  [id]
+  (doseq [typ [:string :long]]
+    (update-indexes-one-type-delete! {} typ id)))
 
 
 (s/fdef create!
@@ -333,6 +370,7 @@
                             :updated  now0, :version   version,    :parent  0,
                             :is_merge 0,
                             :userid   nil,  :sessionid nil,        :comment nil})
+      (update-indexes! :create m {} m)
       m)))
 
 
@@ -360,7 +398,7 @@
 
 
 (s/fdef try-get
-        :args (s/cat :id string?)
+        :args (s/cat :id ::id)
         :ret (s/nilable ::stored-latest))
 
 (defn try-get
@@ -370,7 +408,7 @@
 
 
 (s/fdef get
-        :args (s/cat :id string?)
+        :args (s/cat :id ::id)
         :ret ::stored-latest)
 
 (defn get
@@ -448,8 +486,8 @@
                               :before   (pr-str before), :after     (pr-str changes),
                               :updated  updated,         :version   version,    :parent  parent,
                               :is_merge 0,
-                              :userid   nil,             :sessionid nil,        :comment nil}))
-
+                              :userid   nil,             :sessionid nil,        :comment nil})
+        (update-indexes! :update m before changes))
       data)))
 
 
@@ -484,11 +522,12 @@
                             :updated  (now),      :version   (inc (:version m)), :parent  (:version m),
                             :is_merge 0,
                             :userid   nil,        :sessionid nil,                :comment nil})
+      (update-indexes! :delete m m {})
       nil)))
 
 
 (s/fdef delete-by-id-with-minimum-history!
-        :args (s/cat :id string?)
+        :args (s/cat :id ::id)
         :ret nil?)
 
 (defn delete-by-id-with-minimum-history!
@@ -505,6 +544,7 @@
                             :updated  (now), :version   2000000001,        :parent  2000000000,
                             :is_merge 0,
                             :userid   nil,   :sessionid nil,               :comment nil})
+      (delete-indexes-without-data! id)
       nil)))
 
 
@@ -527,6 +567,7 @@
                               :updated  (now),      :version   (inc version),        :parent  version,
                               :is_merge 0,
                               :userid   nil,        :sessionid nil,                  :comment nil})
+        (delete-indexes-without-data! id)
         nil))))
 
 (defn- deserialize-history
@@ -572,7 +613,7 @@
 ;; 2. InnoDB puts only 767 bytes of a TEXT or BLOB inline, the rest goes into some other block.
 ;;    This is a compromise that sometimes helps, sometimes hurts performance.
 (s/fdef history-short
-        :args (s/cat :id string?)
+        :args (s/cat :id ::id)
         :ret  (s/* ::stored-history-short))
 
 (defn history-short
