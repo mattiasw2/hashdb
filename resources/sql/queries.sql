@@ -74,14 +74,14 @@ WHERE ID = :id
 -- :name create-string-index! :! :n
 -- :doc creates a new string index record
 INSERT INTO string_index
-(id, entity, index_data)
-VALUES (:id, :entity, :index_data)
+(id, entity, k, index_data)
+VALUES (:id, :entity, :k, :index_data)
 
 -- :name upsert-string-index! :! :n
 -- :doc create or update an existing string index record
 INSERT INTO string_index
-(entity, id, index_data)
-VALUES (:entity, :id, :index_data)
+(entity, k, id, index_data)
+VALUES (:entity, :k, :id, :index_data)
 ON DUPLICATE KEY
 UPDATE index_data = :index_data
 
@@ -93,8 +93,8 @@ UPDATE index_data = :index_data
 -- :doc create or update an existing string index record
 -- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
 REPLACE INTO string_index
-(id, entity, index_data)
-VALUES (:id, :entity, :index_data)
+(id, entity, k, index_data)
+VALUES (:id, :entity, :k, :index_data)
 
 
 
@@ -102,7 +102,7 @@ VALUES (:id, :entity, :index_data)
 -- :doc update an existing string index record
 UPDATE string_index
 SET index_data = :index_data
-WHERE id = :id and entity = :entity
+WHERE id = :id AND entity = :entity AND k = :k
 
 -- :name delete-string-index! :! :n
 -- :doc delete a string index given the id
@@ -112,7 +112,7 @@ WHERE id = :id
 -- :name delete-single-string-index! :! :n
 -- :doc delete a string index given the id and entity
 DELETE FROM string_index
-WHERE id = :id and entity = :entity
+WHERE id = :id AND entity = :entity AND k = :k
 
 
 -- :name select-string-index :? :*
@@ -123,4 +123,4 @@ WHERE ID = :id
 -- :name find-string-index :? :*
 -- :doc retrieve all entity and id that matches index_data and entity
 SELECT entity, id FROM string_index
-WHERE entity = :entity AND index_data = :index_data
+WHERE entity = :entity AND k = :k AND index_data = :index_data

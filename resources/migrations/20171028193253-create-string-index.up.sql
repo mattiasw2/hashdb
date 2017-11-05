@@ -1,6 +1,7 @@
 CREATE TABLE `string_index` (
   `id` VARCHAR(36) NOT NULL,
   `entity` VARCHAR(36) NOT NULL,
+  `k` VARCHAR(36) NOT NULL,
   `index_data` VARCHAR(100) NOT NULL)
 ;
 

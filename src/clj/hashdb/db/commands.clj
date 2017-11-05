@@ -255,16 +255,16 @@
 
 
 (defn- update-indexes-one-type-create!
-  [before typ changes id]
+  [before typ changes id entity]
   (assert (empty? before))
   (if (= :string typ)
     (doseq [[k v] changes]
       ;; no point in adding nil:s to index
-      (if v (cmd/create-string-index! {:id id, :entity (str-edn k),
+      (if v (cmd/create-string-index! {:id id, :entity (str-edn entity), :k (str-edn k),
                                        :index_data (str-index v)})))))
 
 (defn- update-indexes-one-type-update!
-  [before changes typ id]
+  [before changes typ id entity]
   (let [keys-before (set (keys before))
         keys-changes0 (set (keys changes))
         disappeared(clojure.set/difference keys-before keys-changes0)
@@ -279,20 +279,20 @@
       (doseq [[k v] map-deleted]
         ;; v = nil means deleted
         (assert (nil? v))
-        (let [res (cmd/delete-single-string-index! {:id id, :entity (str-edn k)})]
+        (let [res (cmd/delete-single-string-index! {:id id, :entity (str-edn entity), :k (str-edn k)})]
           (assert (= 1 res))))
 
       (doseq [k should-be-created]
         ;; no point in adding nil:s to index, so should never happen, even if has nil value
         (assert (k changes))
-        (let [res (cmd/create-string-index! {:id id, :entity (str-edn k),
+        (let [res (cmd/create-string-index! {:id id, :entity (str-edn entity), :k (str-edn k)
                                              :index_data (str-index (k changes))})]
           (assert (= 1 res))))
       (doseq [k should-be-updated]
         ;; update to nil, same as deleting (but this case should not happen
         ;; since then changes will not fulfil ::data)
         (assert (k changes))
-        (cmd/update-string-index! {:id id, :entity (str-edn k),
+        (cmd/update-string-index! {:id id, :entity (str-edn entity), :k (str-edn k)
                                    :index_data (str-index (k changes))}))))
   nil)
 
@@ -317,11 +317,12 @@
 
 (defn update-indexes-one-type!
   [sql-op typ m before changes]
-  (let [id (:id m)]
+  (let [id (:id m)
+        entity (:entity m)]
     (cond (= :create sql-op)
-          (update-indexes-one-type-create! before typ changes id)
+          (update-indexes-one-type-create! before typ changes id entity)
           (= :update sql-op)
-          (update-indexes-one-type-update! before changes typ id)
+          (update-indexes-one-type-update! before changes typ id entity)
           (= :delete sql-op)
           (update-indexes-one-type-delete! changes typ id))))
 
@@ -649,12 +650,13 @@
   [id]
   (let [m           (try-get id)
         idxs        (cmd/select-string-index {:id id})
-        idxs-as-map (into {} (map (fn [idx] [(clojure.edn/read-string (:entity idx))(:index_data idx)]) idxs))]
+        idxs-as-map (into {} (map (fn [idx] [(clojure.edn/read-string (:k idx))(:index_data idx)]) idxs))]
     (if m
       (let [idx-info    (indexes m)
             idx-values  (select-keys m (second idx-info))
             diff        (keep-difference-by-type m idx-info)]
-        (and (= (count idxs) (count idxs-as-map))
+        (and (or (zero? (count idxs)) (= (:entity m) (clojure.edn/read-string (:entity (first idxs)))))
+             (= (count idxs) (count idxs-as-map))
              (= (count idxs) (count idx-values))
              (empty? (map-difference idxs-as-map idx-values))))
       (zero? (count idxs)))))
