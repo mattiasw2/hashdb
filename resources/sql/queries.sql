@@ -113,3 +113,14 @@ WHERE id = :id
 -- :doc delete a string index given the id and entity
 DELETE FROM string_index
 WHERE id = :id and entity = :entity
+
+
+-- :name select-string-index :? :*
+-- :doc retrieve all string index rows for id
+SELECT * FROM string_index
+WHERE ID = :id
+
+-- :name find-string-index :? :*
+-- :doc retrieve all entity and id that matches index_data and entity
+SELECT entity, id FROM string_index
+WHERE entity = :entity AND index_data = :index_data

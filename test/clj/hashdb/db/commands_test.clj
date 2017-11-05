@@ -131,7 +131,8 @@
   []
   (let [m3  (hashdb.db.commands/create! {:s1 "mattias"})
         id3 (:id m3)]
-    (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))))
+    (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
+    (is (= 2 (count (cmd/select-string-index {:id id3}))))))
 
 
 
