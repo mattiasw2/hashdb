@@ -260,7 +260,8 @@
   [conn before typ changes id entity]
   (assert (empty? before))
   (if (= :string typ)
-    (doseq [[k v] changes]
+    ;; (sort to avoid deadlock, by always adding stuff in the same order
+    (doseq [[k v] (sort changes)]
       ;; no point in adding nil:s to index
       (if v (cmd/create-string-index!
              conn
@@ -280,19 +281,22 @@
         should-be-updated (clojure.set/intersection (set key-changes) keys-before)
         should-be-created (clojure.set/difference (set (keys map-changes)) keys-before)]
     (when (= :string typ)
-      (doseq [[k v] map-deleted]
+      ;; Sort to minimize risk of deadlock
+      ;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+      ;; Todo: If it still happends, I have to sort delete+create+update according to :k
+      (doseq [[k v] (sort map-deleted)]
         ;; v = nil means deleted
         (assert (nil? v))
         (let [res (cmd/delete-single-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)})]
           (assert (= 1 res))))
 
-      (doseq [k should-be-created]
+      (doseq [k (sort should-be-created)]
         ;; no point in adding nil:s to index, so should never happen, even if has nil value
         (assert (k changes))
         (let [res (cmd/create-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)
                                                   :index_data (str-index (k changes))})]
           (assert (= 1 res))))
-      (doseq [k should-be-updated]
+      (doseq [k (sort should-be-updated)]
         ;; update to nil, same as deleting (but this case should not happen
         ;; since then changes will not fulfil ::data)
         (assert (k changes))
