@@ -265,7 +265,11 @@
     (is (verify-stored-data id3))
     (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
     (is (verify-stored-data id3))
-    (is (= 2 (count (cmd/select-string-index {:id id3}))))))
+    (is (= 2 (count (cmd/select-string-index {:id id3}))))
+    (let [found   (select-by-string :unknown :s3 "foo")
+          ntfound (select-by-string :unknown :s3 "foox")]
+      (is (= "lena" (:s1 (first found))))
+      (is (empty? ntfound)))))
 
 
 
