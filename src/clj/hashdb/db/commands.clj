@@ -126,6 +126,7 @@
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/and string? #(<= (count %) 36)))
 (s/def ::entity keyword?)
+(s/def ::k keyword?)
 (s/def ::deleted boolean?)
 (s/def ::before map?)
 (s/def ::after map?)
@@ -413,14 +414,20 @@
   m)
 
 
+(defn- extract-row
+  [row]
+  (let [m (clojure.edn/read-string (:data row))]
+    (when m (verify-row-in-sync row m))
+    m))
+
+
 (defn- try-get-internal
   "Return map at `id`, null if not found."
   [id row]
   (let [row (cmd/get-latest {:id id})
-        m   (clojure.edn/read-string (:data row))]
+        m   (extract-row row)]
     (when row (assert (and (= id (:id row)))
                       "id and/or version and data columns in table latest are not in sync."))
-    (when m (verify-row-in-sync row m))
     m))
 
 
@@ -476,6 +483,18 @@
   "Return all rows for unknown `entity`."
   []
   (select-all-nil-entity :unknown))
+
+;; (cmd/select-by-string-index {:entity ":unknown" :k ":s1" :index_data "lena"})
+
+(s/fdef select-by-string
+        :args (s/cat :entity ::entity :k ::k :search string?)
+        :ret  (s/* ::stored-latest))
+
+(defn select-by-string
+  "Return all rows of type `entity` where `k` is exactly the string `search`."
+  [entity k search]
+  (let [res (cmd/select-by-string-index {:entity (str-edn entity) :k (str-edn k) :index_data (str-index search)})]
+    (map extract-row res)))
 
 
 (s/fdef update!

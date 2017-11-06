@@ -33,6 +33,17 @@ SELECT id, entity, version, data FROM latest
 where entity is null
 
 
+-- :name select-by-string-index :? :*
+-- :doc retrieve all rows
+SELECT l.id, l.entity, l.version, l.data
+FROM   latest as l , string_index as si
+WHERE  l.entity  = :entity
+AND    si.entity = :entity
+AND    l.id      = si.id
+AND    si.k      = :k
+AND    si.index_data = :index_data
+
+
 -- :name delete-latest! :! :n
 -- :doc delete a latest given the id
 DELETE FROM latest
