@@ -182,6 +182,10 @@
     (s/def ::data
       (s/merge (s/map-of keyword? any?) ::indexed-data))))
 
+;; for changes, it is okay to set nil, which means remove key
+(s/def ::changes
+  (s/map-of keyword? (s/nilable some?)))
+
 
 (s/def ::stored-latest
   (s/keys :req-un [::id ::entity ::updated ::version]
@@ -243,7 +247,7 @@
   (into {} (map (fn [[k v]] [k (into {} v)]) m)))
 
 (s/fdef keep-difference-by-type
-        :args (s/cat :changes ::data :idx-info ::idx-info)
+        :args (s/cat :changes ::changes :idx-info ::idx-info)
         :ret  ::data)
 
 (defn keep-difference-by-type
@@ -320,7 +324,7 @@
 
 (s/fdef update-indexes-one-type!
         :args (s/cat :conn any? :sql-op ::sql-op :typ ::idx-type :m ::data
-                     :before (s/nilable ::data) :changes (s/nilable ::data))
+                     :before (s/nilable ::data) :changes ::changes)
         :ret nil?)
 
 (defn update-indexes-one-type!
@@ -337,7 +341,7 @@
 
 (s/fdef update-indexes!
         :args (s/cat :conn any? :sql-op ::sql-op :m ::data
-                     :before ::data :changes (s/nilable ::data))
+                     :before ::data :changes ::changes)
         :ret nil?)
 
 (defn update-indexes!
@@ -349,8 +353,12 @@
         before-relevant  (keep-difference-by-type before idx-info)
         changes-relevant (keep-difference-by-type changes idx-info)]
     (doseq [typ [:string :long]]
-      (update-indexes-one-type! conn sql-op typ m
-                                (typ before-relevant) (typ changes-relevant)))))
+      (let [before0 (typ before-relevant)
+            changes0 (typ changes-relevant)]
+        (if (or before0 changes0)
+          ;; changes0 required to be map according to spec
+          (update-indexes-one-type! conn sql-op typ m before0 (or changes0 {})))))))
+
 
 
 (s/fdef delete-indexes-without-data!
@@ -471,7 +479,7 @@
 
 
 (s/fdef update!
-        :args (s/cat :m ::stored-latest :changes ::data)
+        :args (s/cat :m ::stored-latest :changes ::changes)
         :ret ::stored-latest)
 
 (defn update!
@@ -512,7 +520,7 @@
 
 
 (s/fdef update-diff!
-        :args (s/cat :m ::stored-latest :changes ::data)
+        :args (s/cat :m ::stored-latest :changes ::changes)
         :ret ::stored-latest)
 
 (defn update-diff!
