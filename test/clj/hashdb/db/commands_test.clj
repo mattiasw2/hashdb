@@ -83,7 +83,8 @@
 ;; =>{:b nil}
 
 (s/fdef create-update-operation
-        :args (s/or :base (s/cat :m any?) ;; :hashdb.db.commands/data doesn't work since just map-like
+        :args (s/or :base (s/cat :m :hashdb.db.commands/data)
+                    ;; not ::data any more on recursion, since we called filter
                     :rec  (s/cat :m any? :changes :hashdb.db.commands/changes))
         :ret  :hashdb.db.commands/changes)
 
@@ -91,7 +92,9 @@
 (defn create-update-operation
   "Change or delete or add a new key to `m`.
    In 30% of the operations, then value will be nil, i.e. delete."
-  ([m] (create-update-operation (filter #(not (#{:id :entity :k :updated :version} (key %))) m) {}))
+  ([m] (let [res (create-update-operation (filter #(not (#{:id :entity :k :updated :version} (key %))) m) {})]
+         ;; (println (count res))
+         res))
   ([m changes]
    (if (<= (count m) 3) changes
        (let [nxt (rand-int (count m))
@@ -108,7 +111,9 @@
   (let [saved-m2s (timed "create!" (mapv create! samples))
         ids (map :id saved-m2s)
         _ (hashdb.db.commands/verify-these ids)
-        saved-m3s (timed "update" (mapv #(update! % (create-update-operation %)) saved-m2s))
+        saved-m3s0 (timed "update" (mapv #(update! % (create-update-operation %)) saved-m2s))
+        _ (hashdb.db.commands/verify-these ids)
+        saved-m3s (timed "update-2" (mapv #(update! % (create-update-operation %)) saved-m3s0))
         _ (hashdb.db.commands/verify-these ids)
         saved-m4s (timed "delete" (mapv #(delete! %) saved-m3s))
         _ (hashdb.db.commands/verify-these ids)]))
@@ -308,3 +313,5 @@
     ;; Here you get a 2 rows affected, the first is the failed insert, the 2nd the update
     (is (= 2 (hashdb.db.core/upsert-string-index-using-replace! {:id id :entity entity :k k :index_data "bar"})))
     (is (= 1 (hashdb.db.core/delete-string-index! {:id id :entity entity})))))
+
+(orchestra.spec.test/instrument)

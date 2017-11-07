@@ -116,6 +116,13 @@
   `(let [arg1# ~arg1]
      (when arg1# (~f arg1#))))
 
+;; (gen/sample (gen/fmap #(keyword (substring+ % 0 4))(gen/string-alphanumeric)))
+;; (: :n : :mi0 :1 :90G : :qDAv :5VDc :11)
+
+;; always between 1 and 4 chars!
+(s/def ::short-keyword
+  (s/with-gen keyword? #(gen/fmap (fn [k] (keyword (let [str (substring+ k 0 4)] (if (empty? str) "s1" str))))
+                                  (gen/string-alphanumeric))))
 
 (s/def ::datetime (dev-with-gen #(or
                                   ;; mysql select returns joda-time
@@ -181,7 +188,7 @@
                        ;; ::i1 ::i2
                        ::s4]))
     (s/def ::data
-      (s/merge (s/map-of keyword? any?) ::indexed-data))))
+      (s/merge (s/map-of ::short-keyword any?) ::indexed-data))))
 
 ;; for changes, it is okay to set nil, which means remove key
 (s/def ::changes
