@@ -7,6 +7,13 @@
    [clojure.pprint :as pp]
    [clojure.tools.logging :as log]))
 
+(defn substring+
+  [str start end]
+  (let [len (count str)
+        start (min start len)
+        end (min end len)]
+    (.substring str start end)))
+
 
 ;; this error monad is cool too: https://brehaut.net/blog/2011/error_monads
 (defmacro try*
