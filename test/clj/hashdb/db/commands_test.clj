@@ -10,6 +10,7 @@
    [clojure.spec.alpha :as s]
    [clojure.spec.gen.alpha :as gen]
    [mw.std :refer :all]
+   user
    [clojure.spec.test.alpha :as stest])
   (:import [java.sql
             BatchUpdateException
@@ -263,7 +264,6 @@
     (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity)))))))
 
 (deftest test-all-commands-with-indexes-small
-  []
   (let [m3  (hashdb.db.commands/create! {:s1 "mattias"})
         id3 (:id m3)]
     (is (verify-stored-data "unknown-id"))
@@ -275,6 +275,14 @@
           ntfound (select-by-string :unknown :s3 "foox")]
       (is (= "lena" (:s1 (first found))))
       (is (empty? ntfound)))))
+
+(deftest test-verify-row-in-sync
+  (is (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f"} {:updated (now) :entity :f}))
+  (let [start (now)]
+    (Thread/sleep 1100)
+    (is (thrown?
+         Throwable
+         (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f"} {:updated start :entity :f})))))
 
 
 
@@ -313,5 +321,38 @@
     ;; Here you get a 2 rows affected, the first is the failed insert, the 2nd the update
     (is (= 2 (hashdb.db.core/upsert-string-index-using-replace! {:id id :entity entity :k k :index_data "bar"})))
     (is (= 1 (hashdb.db.core/delete-string-index! {:id id :entity entity})))))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; spec test when using filter on maps
+
+(s/def ::test-id int?)
+(s/def ::test-data string?)
+
+(s/def ::test1
+  (s/keys :req-un [::test-id ::test-data]))
+
+(s/fdef spec-test
+        :args (s/cat :m ::test1)
+        :ret  int?)
+
+(defn spec-test
+  [m]
+  (count m))
+
+(def test1-sample {:test-id 1 :test-data "hello"})
+
+(defn works
+  []
+  (spec-test test1-sample))
+
+(defn works-not-which-is-ok
+  []
+  (spec-test (dissoc test1-sample :test-data)))
+
+(defn works-not-which-is-not-ok
+  []
+  (spec-test (filter (fn [_] true) test1-sample)))
+
 
 (orchestra.spec.test/instrument)

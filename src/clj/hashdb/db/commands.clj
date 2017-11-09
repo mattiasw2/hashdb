@@ -10,6 +10,7 @@
    [clojure.spec.gen.alpha :as gen]
    [clojure.spec.test.alpha :as stest2]
    [orchestra.spec.test]
+   [clj-time.core :as t]
    [mw.std :refer :all]
    [qbits.tardis :as qbits])
   (:import [java.sql
@@ -172,6 +173,10 @@
 ;; use s/merge, which merges maps.
 ;; In order to sync keyword with types, you need to use s/keys
 ;; SUCCESS!
+
+;; s/form to destruct specs
+;;(s/form ::indexed-data)
+;; => (clojure.spec.alpha/keys :opt-un [:hashdb.db.commands/s1 :hashdb.db.commands/s2 :hashdb.db.commands/s3 :hashdb.db.commands/s4 :hashdb.db.commands/s4])
 
 (if-not (:dev env)
   (s/def ::data
@@ -408,16 +413,27 @@
       (update-indexes! conn :create m {} m)
       m)))
 
+(defn max-1-second-diff
+  [t1 t2]
+  (let [diff (t/in-millis (if (t/before? t1 t2)(t/interval t1 t2)(t/interval t2 t1)))]
+    ;; (println diff)
+    ;; seem that the diff can be up to 400ms
+    (< diff 1000)))
 
-(defn- verify-row-in-sync
+
+(defn verify-row-in-sync
   "Make sure db `row` is in sync with `m` from the :data column.
    Currently, only :id and :version are verified, since if these arr
    wrong, it is a catastrophic error."
   [row m]
   (assert (and (= (:id row)(:id m))
                (= (:version row)(:version m))
-               (= (:entity row)(str-edn (:entity m))))
-          "id, entity, and/or version and data columns in table latest are not in sync.")
+               (= (:entity row)(str-edn (:entity m)))
+               ;; https://stackoverflow.com/questions/15333320/how-to-convert-joda-time-datetime-to-java-util-date-and-vice-versa
+               (let [m-updated (org.joda.time.DateTime. (:updated m))
+                     row-updated (:updated row)]
+                 (max-1-second-diff m-updated row-updated)))
+          "id, entity, updated, and/or version and data columns in table latest are not in sync.")
   m)
 
 

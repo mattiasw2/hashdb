@@ -14,22 +14,22 @@ WHERE id = :id and version = :parent
 
 -- :name get-latest :? :1
 -- :doc retrieve a latest given the id.
-SELECT id, entity, version, data FROM latest
+SELECT id, entity, version, data, updated FROM latest
 WHERE id = :id
 
 -- :name select-all-latest :? :*
 -- :doc retrieve all rows
-SELECT id, entity, version, data FROM latest
+SELECT id, entity, version, data, updated FROM latest
 
 -- :name select-all-latest-by-entity :? :*
 -- :doc retrieve all rows
-SELECT id, entity, version, data FROM latest
+SELECT id, entity, version, data, updated FROM latest
 where entity = :entity
 
 
 -- :name select-all-latest-null-entity :? :*
 -- :doc retrieve all rows
-SELECT id, entity, version, data FROM latest
+SELECT id, entity, version, data, updated FROM latest
 where entity is null
 
 
