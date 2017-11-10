@@ -17,3 +17,6 @@ profiles.clj
 *.clj~
 *.clj#
 .#*.clj
+TAGS
+/docs
+*.cmd~
