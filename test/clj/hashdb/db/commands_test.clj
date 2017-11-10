@@ -66,17 +66,10 @@
 ;; hashdb.db.commands-test> "Timed:  doseq: 7902.750535 msecs"
 ;; "Timed:  doseq: 7708.286371 msecs"
 
-(defn migrate []
-  (migrations/migrate ["migrate"] (select-keys env [:database-url])))
-
-(defn rollback []
-  (migrations/migrate ["rollback"] (select-keys env [:database-url])))
-
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
   []
-  (doseq [x (range 10)] (rollback))
-  (migrate))
+  (migrations/migrate ["reset"] (select-keys env [:database-url])))
 
 
 (defn random-string
