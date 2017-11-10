@@ -182,6 +182,8 @@
   (s/def ::data
     (s/map-of keyword? any?))
   (do
+    ;; during testing, there are the keys that are indexed
+    (def possible-keys #{:s1 :s2 :s3 :s4})
     (s/def ::s1 string?)
     (s/def ::s2 string?)
     (s/def ::s3 string?)

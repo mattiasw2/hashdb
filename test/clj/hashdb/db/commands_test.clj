@@ -106,42 +106,89 @@
          (recur rest (assoc changes k v))))))
 
 
+;; (count-by-keys [{:s1 1 :k 2}{:s1 2 :s2 3 :l 4}])
+;; ==> {:s4 0, :s1 2, :s3 0, :s2 1}
+(defn count-by-keys
+  [ms]
+  (->>
+   (for [k possible-keys]
+     [k (count (filter (fn [m] (k m)) ms))])
+   (into {})))
+
+
+;; (by-keys [{:s1 1 :k 2  :id "A"}{:s1 2 :s2 3 :l 4 :id "B"}{:s2 3 :id "C"}])
+;; => {:s4 (), :s1 ({:id "A", :s1 1} {:id "B", :s1 2}), :s3 (), :s2 ({:id "B", :s2 3} {:id "C", :s2 3})}
+(defn by-keys
+  [ms]
+  (->>
+   (for [k possible-keys]
+     [k (map #(select-keys % [:id k])(filter (fn [m] (k m)) ms))])
+   (into {})))
+
+;; tested by just deleting a row in string_index, and then I get warnings like
+;; FAIL in () (commands_test.clj:138)
+;; expected: 2
+;;   actual: 1
+;;     diff: - 2
+;;           + 1
+
+(defn verify-indexes
+  "Verify that string_index entries are in sync with latest.
+   It is done by looking up all indexed values and make sure all are found."
+  [ms]
+  (doseq [[k expected](by-keys ms)]
+    (let [by-value (group-by k expected)]
+      (doseq [[expected ms] by-value]
+        (assert (some? expected))
+        ;; this code will only work if we have 1 thread
+        (let [hits (select-by-string :unknown k expected)]
+          (is (= (count hits)(count ms))))))))
+
+
+
 (defn- test-many-continue
-  [samples]
+  [samples single]
   (let [saved-m2s (timed "create!" (mapv create! samples))
         ids (map :id saved-m2s)
         _ (hashdb.db.commands/verify-these ids)
+        _ (when single (verify-indexes saved-m2s))
         saved-m3s0 (timed "update" (mapv #(update! % (create-update-operation %)) saved-m2s))
         _ (hashdb.db.commands/verify-these ids)
+        _ (when single (verify-indexes saved-m3s0))
         saved-m3s (timed "update-2" (mapv #(update! % (create-update-operation %)) saved-m3s0))
         _ (hashdb.db.commands/verify-these ids)
+        _ (when single (verify-indexes saved-m3s))
         saved-m4s (timed "delete" (mapv #(delete! %) saved-m3s))
-        _ (hashdb.db.commands/verify-these ids)]))
+        _ (hashdb.db.commands/verify-these ids)
+        _ (when single (verify-indexes saved-m4s))]))
+
 
 (defn test-many
+  "Test 1 thread."
   [& [n]]
   (clear-database)
   (let [n (or n 1000)
         samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
-    (test-many-continue samples)))
+    (test-many-continue samples true)))
 
 ;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
 ;; in create!
 ;; when running (test-many-parallel :n 100 :par 10 :delay 2000)
 ;; and (test-many-parallel :n 100 :par 10 :delay 500)  on the 9th thread doing create!
 (defn test-many-parallel
+  "Test in parallel.
+   If just one thread, the indexes will also be verified."
   [& {:keys [n par delay]
       :or {n 1000
            par 2
            delay 2000}}]
-  (let [n (or n 1000)
-        samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
+  (let [samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
     (clear-database)
     (->>
      (range par)
      (mapv (fn [_]
              (Thread/sleep delay)
-             (future (test-many-continue samples))))
+             (future (test-many-continue samples (= par 1)))))
      (mapv deref))
     (println "Finished")))
 
