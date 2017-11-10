@@ -35,7 +35,7 @@ where entity is null
 
 -- :name select-by-string-index :? :*
 -- :doc retrieve all rows
-SELECT l.id, l.entity, l.version, l.data
+SELECT l.id, l.entity, l.version, l.data, l.updated
 FROM   latest as l , string_index as si
 WHERE  l.entity  = :entity
 AND    si.entity = :entity
