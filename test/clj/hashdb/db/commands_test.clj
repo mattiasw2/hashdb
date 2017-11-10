@@ -10,7 +10,7 @@
    [clojure.spec.alpha :as s]
    [clojure.spec.gen.alpha :as gen]
    [mw.std :refer :all]
-   user
+   [luminus-migrations.core :as migrations]
    [clojure.spec.test.alpha :as stest])
   (:import [java.sql
             BatchUpdateException
@@ -66,11 +66,17 @@
 ;; hashdb.db.commands-test> "Timed:  doseq: 7902.750535 msecs"
 ;; "Timed:  doseq: 7708.286371 msecs"
 
+(defn migrate []
+  (migrations/migrate ["migrate"] (select-keys env [:database-url])))
+
+(defn rollback []
+  (migrations/migrate ["rollback"] (select-keys env [:database-url])))
+
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
   []
-  (doseq [x (range 10)] (user/rollback))
-  (user/migrate))
+  (doseq [x (range 10)] (rollback))
+  (migrate))
 
 
 (defn random-string
