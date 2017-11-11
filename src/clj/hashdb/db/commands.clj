@@ -18,30 +18,22 @@
             PreparedStatement]))
 
 
-;;; TODO: BUG: I have not properly thought about when to delete index-entries
-;;; TODO: BUG: I will do it too often, unless.
-;;; The original idea was like this: I send in a map + only the keys that needs to be changed
-;;; But then the question is how to delete map-entries? Most logical is to set them to nil.
-
-;;; TODO: add :k column to string_index, and use entity for entity, since it will
-;;; TODO: improve lookups if same key used in many different entities (like SSS's frm)
-
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;; mysql tips:
+;;; mySQL tips:
+;;;
 ;;; 1. subqueries are slow, but there is a trick:
 ;;;    https://stackoverflow.com/questions/6135376/mysql-select-where-field-in-subquery-extremely-slow-why
-;;; 2. What is done i v6? Also shows different ways of doing it.
+;;; 2. What is done in mySQL v6? Also shows different ways of doing it.
 ;;;    https://www.scribd.com/document/2546837/New-Subquery-Optimizations-In-MySQL-6
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;; generic functions
+;;; # Generic functions
 
-;; (into {} (clojure.set/difference (into #{} {:a 1, :b 2, :d 4}) (into #{} {:a 2, :c 3, :d 4})))
-;; => {:b 2, :a 1}
+;;     (into {} (clojure.set/difference
+;;                  (into #{} {:a 1, :b 2, :d 4})
+;;                  (into #{} {:a 2, :c 3, :d 4})
+;;     => {:b 2, :a 1}
 
 (s/fdef map-difference
         :args (s/cat :m-new map? :m_old map?)
@@ -53,31 +45,9 @@
   (into {} (clojure.set/difference (into #{} m-new) (into #{} m-old))))
 
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; some spec-helpers
-
-;; defn since s/with-gen function
-(defn dev-with-gen
-  "Only generator in dev code."
-  [spec gen-fn]
-  (if (:dev env)
-    (s/with-gen spec gen-fn)
-    spec))
-
-;; defmacro, since s/or macro
-(defmacro dev-spec-or
-  "In dev (dev-spec-or :a a :b b) same as (s/or :a a :b b), but in
-   prod only a."
-  [k1 pred1 k2 pred2]
-  (if (:dev env)
-    `(s/or ~k1 ~pred1 ~k2 ~pred2)
-    pred1))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; specs for api and storage
-
-;; uuid? is the underlaying, not sure how this is mapped to db
+;; We use UUID stored as string as ID in the database.
+;; However, we can also use uuid directly. It is most likely stored as binary in db.
+;; Then uuid? can be used as spec.
 (s/def ::uuid-str (s/and string? #(<= (count %) 36)))
 (s/fdef uuid
         :args (s/cat)
@@ -87,40 +57,108 @@
   "Return a uuid as string."
   (str (java.util.UUID/randomUUID)))
 
+
 (defn now []
   "Return now in UTC."
   (new java.util.Date))
 
 
-;; (s/fdef fsome
-;;         :args (s/cat :form (s/cat :f symbol? :arg1 some?)) ; cannot use fn? since not parsed as function yet.
-;;         :ret any?)
-;; tips: http://blog.klipse.tech/clojure/2016/10/10/defn-args.html
+;;     (mapify-values {:1 [[:a :b][:c :d]] :2 [[:e :f]]}))
+;;     ==> {:1 {:a :b, :c :d}, :2 {:e :f}}"
+(defn mapify-values
+  "The values of the map `m` are map-like. Convert them into maps."
+  [m]
+  (into {} (map (fn [[k v]] [k (into {} v)]) m)))
 
-;; (s/def ::function-application (s/cat :f symbol? :arg1 any?))
 
+;; For edn, we need to use pr-str
+;; :static true is actually a no-op, it is dynamic that is needed.
+;;(def ^{:static true} str-edn pr-str)
+(def str-edn pr-str)
+
+
+;; But for str-index, we do not want quotes around and similar.
+(def str-index str)
+
+
+;; Mattias premature performance optimization :-)
+(def empty-map-edn (str-edn {}))
+
+
+;; ## TODO: how to create an spec for fwhen?
+;;
+;; I cannot use fn? since not parsed as function yet.
+;;
+;;     (s/fdef fwhen
+;;             :args (s/cat :form (s/cat :f symbol?
+;;                                       :arg1 some?
+;;             :ret any?)
+;;
+;; Tips: http://blog.klipse.tech/clojure/2016/10/10/defn-args.html
+;;
+;;     (s/def ::function-application (s/cat :f symbol? :arg1 any?))
+;;
 ;; I cannot undef the above spec, so I did like this for now
-(s/fdef fsome
+;;
+;;     (s/fdef fwhen
+;;             :args (s/cat :arg1 ::function-application)
+;;             :ret  any?)
+
+(s/fdef fwhen
         :args any?
         :ret  any?)
 
-;; (s/fdef fsome
-;;         :args (s/cat :arg1 ::function-application)
-;;         :ret  any?)
-
-;; should be renamed to fwhen, since replacement of when.
-(defmacro fsome
-  "Use like (fsome (f arg1)), which is same as (f arg1), except that if arg1 is nil, nil is returned."
+(defmacro fwhen
+  "Use like (fwhen (f arg1)), which is same as (f arg1), except that if arg1 is nil, nil is returned."
   [[f arg1]]
   ;; instead of using s/fdef, check clojure spec inside macro
   (assert (and (s/valid? symbol? f)(s/valid? any? arg1)))
   `(let [arg1# ~arg1]
      (when arg1# (~f arg1#))))
 
-;; (gen/sample (gen/fmap #(keyword (substring+ % 0 4))(gen/string-alphanumeric)))
-;; (: :n : :mi0 :1 :90G : :qDAv :5VDc :11)
 
-;; always between 1 and 4 chars!
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Some SPEC-helpers
+
+;; defn since s/with-gen is a function function
+(defn dev-with-gen
+  "Only generator in dev code."
+  [spec gen-fn]
+  (if (:dev env)
+    (s/with-gen spec gen-fn)
+    spec))
+
+;; defmacro, since s/or is a macro
+(defmacro dev-spec-or
+  "In dev (dev-spec-or :a a :b b) same as (s/or :a a :b b), but in
+   prod only a."
+  [k1 pred1 k2 pred2]
+  (if (:dev env)
+    `(s/or ~k1 ~pred1 ~k2 ~pred2)
+    pred1))
+
+;; ## Tip: s/form can be used to interpret SPECs
+;;     (s/form ::indexed-data)
+;;     =>
+;;     (clojure.spec.alpha/keys
+;;      :opt-un [:hashdb.db.commands/s1
+;;               :hashdb.db.commands/s2
+;;               :hashdb.db.commands/s3
+;;               :hashdb.db.commands/s4
+;;               :hashdb.db.commands/s4])
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # SPECs for api and storage
+;;
+
+
+;; ## ::short-keyword always  has between 1 and 4 chars!
+;;
+;;     (gen/sample
+;;      (gen/fmap
+;;       #(keyword (substring+ % 0 4))
+;;       (gen/string-alphanumeric)))
+;;     => (: :n : :mi0 :1 :90G : :qDAv :5VDc :11)
 (s/def ::short-keyword
   (s/with-gen keyword? #(gen/fmap (fn [k] (keyword (let [str (substring+ k 0 4)] (if (empty? str) "s1" str))))
                                   (gen/string-alphanumeric))))
@@ -146,37 +184,21 @@
 (s/def ::sessionid (s/nilable ::uuid-str))
 (s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
 
-;; the toplevel in our data should be a map with keywords. The rest we do
-;; not care about. Do not know is there is a any-spec that generates.
-;; YES any? solves it EXCEPT DATETIME
-;; (s/def ::myany
-;;   (s/or :int int?
-;;         :float float?
-;;         :string string?
-;;         :nil nil?
-;;         :datetime ::datetime
-;;         :boolean boolean?
-;;         :set set?
-;;         :map map?
-;;         :vector vector?
-;;         :seq seq?))
-
-;; Added some known keys, which I can use for indexing testing
-
-;; trial 1 (but then I missed the types of the index)
-;; (s/def ::key
-;;   (dev-spec-or :normal keyword? :dev #{:a :b :c :d :e}))
-;; (s/def ::data
-;;   (s/map-of ::key any?))
+;; ## ::data is the data stored in the hashdb
 ;;
-;; trial 2
-;; use s/merge, which merges maps.
-;; In order to sync keyword with types, you need to use s/keys
-;; SUCCESS!
-
-;; s/form to destruct specs
-;;(s/form ::indexed-data)
-;; => (clojure.spec.alpha/keys :opt-un [:hashdb.db.commands/s1 :hashdb.db.commands/s2 :hashdb.db.commands/s3 :hashdb.db.commands/s4 :hashdb.db.commands/s4])
+;; We use two different specs, one for development (or actually test-case
+;; data generation), and one for production.
+;;
+;; My first attempt was like this, however, then I cannot force the
+;; data for the keys :s1 :s2 :s3 :s4 to be strings
+;;
+;;     (s/def ::key
+;;       (dev-spec-or :normal keyword? :dev #{:a :b :c :d :e}))
+;;     (s/def ::data
+;;       (s/map-of ::key any?))
+;;
+;; The correct way is to use s/merge and s/keys, which merges maps.
+;;
 
 (if-not (:dev env)
   (s/def ::data
@@ -198,25 +220,35 @@
       ;; ::indexed-data should be first, it created samples without any :s1 :s2 :s3 :s4
       (s/merge ::indexed-data (s/map-of ::short-keyword any?)))))
 
+;; `::changes` are the set of key-value pairs that are used to update the stored data
 ;; for changes, it is okay to set nil, which means remove key
 (s/def ::changes
   (s/map-of keyword? (s/nilable some?)))
 
-
+;; The complete stored data.
+;;
+;; TODO: where is ::data?
 (s/def ::stored-latest
   (s/keys :req-un [::id ::entity ::updated ::version]
           :opt-un []))
 
+;; The history record.
 (s/def ::stored-history
   (s/keys :req-un [::id ::entity ::deleted ::before ::after ::updated ::version ::parent]
           :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
+;; The history record without the data.
 (s/def ::stored-history-short
   (s/keys :req-un [::id  ::entity ::deleted ::updated ::version ::parent]
           :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # SPECs for indexes
+
+;; Indexes can either be string or integer.
 (s/def ::idx-type #{:string :long})
 
+;; The list of all indexed keys, and their type.
 (s/def ::idx-info
   (s/tuple (s/map-of keyword? ::idx-type)
            (s/coll-of keyword? :into #{})))
@@ -226,7 +258,8 @@
         :ret  ::idx-info)
 
 ;; TODO: implement a function that returns this list.
-;; TODO: For now, it is hard-coded
+;;
+;; TODO: For now, it is hard-coded. Only works for test-cases
 (defn indexes
   "Depending on the entity and other fields in `m`, return the indexes.
    Only non-nil values will be indexed."
@@ -235,32 +268,20 @@
              :i1 :long, :i2 :long}]
     [raw (into #{} (map key raw))]))
 
-;; for edn, we need to use pr-str
-;; :static true is actually a no-op, it is dynamic that is needed.
-;;(def ^{:static true} str-edn pr-str)
-(def str-edn pr-str)
 
-;; but for str-index, we do not want quotes around and similar
-(def str-index str)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Update indexes
 
-;; mattias premature performance optimization :-)
-(def empty-map-edn (str-edn {}))
-
-;; algorithm #1 for update-indexes!
-;; 1. keep only fields in before and after that have indexes
-;; 2. for the difference, 3 options:
-;; 3a. nil or non-existent in before, exists in after => insert
-;; 3b. exists in before, nil or non-existent in after => delete
-;; 3c. exists in before, exists in after => update
+;; Algorithm #1 for update-indexes!
 ;;
-;; optimization, if I want to use mult-insert, it is best if we loop per type,
+;; * Keep only fields in before and after that have indexes
+;; * For the difference, 3 options:
+;;  * nil or non-existent in before, exists in after => insert
+;;  * exists in before, nil in after => delete
+;;  * exists in before, exists in after => update
+;;
+;; Optimization: if I want to use multi-insert, it is best if we loop per type,
 ;; i.e. first for :string, then for :int
-
-(defn mapify-values
-  "(mapify-values {:1 [[:a :b][:c :d]] :2 [[:e :f]]}))
-   ==> {:1 {:a :b, :c :d}, :2 {:e :f}}"
-  [m]
-  (into {} (map (fn [[k v]] [k (into {} v)]) m)))
 
 (s/fdef keep-difference-by-type
         :args (s/cat :changes ::changes :idx-info ::idx-info)
@@ -277,6 +298,7 @@
 
 
 (defn- update-indexes-one-type-create!
+  "Create index entries for new record `id`."
   [conn before typ changes id entity]
   (assert (empty? before))
   (if (= :string typ)
@@ -289,6 +311,7 @@
               :index_data (str-index v)})))))
 
 (defn- update-indexes-one-type-update!
+  "Update index entries for already existing record `id`."
   [conn before changes typ id entity]
   (let [keys-before (set (keys before))
         keys-changes0 (set (keys changes))
@@ -324,11 +347,13 @@
                                         :index_data (str-index (k changes))}))))
   nil)
 
-;; for delete, we can just delete all index entries at once
+
+;; For delete, we can just delete all index entries at once
 ;; so actually unnecessary to see which exact keywords are indexed,
-;; just which type of indexes there are (no point deleting int-indexes
-;; there are none)
+;; just which type of indexes there are. No point deleting int-indexes
+;; there are none.
 (defn- update-indexes-one-type-delete!
+  "Delete al index entries for record `id`."
   [conn changes typ id]
   (assert (empty? changes))
   (if (= :string typ)
@@ -336,7 +361,9 @@
   nil)
 
 
+;; Are we creating a new record, updating an existing, or deleting an old one?
 (s/def ::sql-op #{:create :update :delete})
+
 
 (s/fdef update-indexes-one-type!
         :args (s/cat :conn any? :sql-op ::sql-op :typ ::idx-type :m ::data
@@ -344,6 +371,9 @@
         :ret nil?)
 
 (defn update-indexes-one-type!
+  "Update the index entries for record `m`.
+   sql-op tells if `m` is a new record, an existing,
+   or if the record `m` will be removed."
   [conn sql-op typ m before changes]
   (let [id (:id m)
         entity (:entity m)]
@@ -381,13 +411,16 @@
         :args (s/cat :conn any? :id ::id)
         :ret nil?)
 
-;; do not know which indexes to delete, i.e. has to look everywhere
 (defn delete-indexes-without-data!
-  "Delete all index entries."
+  "Delete all index entries for record `id`.
+   Can be inefficient, since we have to assume there are both
+   string and integer indexed keys."
   [conn id]
   (doseq [typ [:string :long]]
     (update-indexes-one-type-delete! conn {} typ id)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Create: Insert map `m` into db.
 
 (s/fdef create!
         :args (s/cat :m ::data)
@@ -416,7 +449,12 @@
       (update-indexes! conn :create m {} m)
       m)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Verify duplicated data in SQL-table row and inside record `m` are identical.
+
 (defn max-1-second-diff
+  "joda time and java time seems to be slightly different.
+   If they are at most 1s apart, assume equal."
   [t1 t2]
   (let [diff (t/in-millis (if (t/before? t1 t2)(t/interval t1 t2)(t/interval t2 t1)))]
     ;; (println diff)
@@ -425,9 +463,7 @@
 
 
 (defn verify-row-in-sync
-  "Make sure db `row` is in sync with `m` from the :data column.
-   Currently, only :id and :version are verified, since if these arr
-   wrong, it is a catastrophic error."
+  "Make sure db `row` is in sync with `m` from the :data column."
   [row m]
   (assert (and (= (:id row)(:id m))
                (= (:version row)(:version m))
@@ -439,8 +475,11 @@
           "id, entity, updated, and/or version and data columns in table latest are not in sync.")
   m)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Read record helpers from db
 
 (defn- extract-row
+  "Deserialize the map, and verify that in sync with rest of SQL-row."
   [row]
   (let [m (clojure.edn/read-string (:data row))]
     (when m (verify-row-in-sync row m))
@@ -456,6 +495,8 @@
                       "id and/or version and data columns in table latest are not in sync."))
     m))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Read single record from db using `id`
 
 (s/fdef try-get
         :args (s/cat :id ::id)
@@ -478,6 +519,8 @@
     (if m m (throw (ex-info (str "Row with id " id " missing!")
                             {:id id})))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Read many records from database
 
 (s/fdef select-all
         :args (s/cat)
@@ -522,6 +565,9 @@
   (let [res (cmd/select-by-string-index {:entity (str-edn entity) :k (str-edn k) :index_data (str-index search)})]
     (map extract-row res)))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Update single record `m` in db
 
 (s/fdef update!
         :args (s/cat :m ::stored-latest :changes ::changes)
@@ -574,6 +620,8 @@
   (let [changes (map-difference m-new m-old)]
     (update! m-old changes)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Delete single record `m` from database db
 
 (s/fdef delete!
         :args (s/cat :m ::data)
@@ -582,7 +630,7 @@
 (defn delete!
   "Delete the row for `m`.
    We do not care if anyone has updated or deleted the row just before.
-   Will leave a perfect history."
+   Will leave a perfect history, if the `m` you send in the is the latest."
   [m]
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
   (sql/with-db-transaction [conn *db*]
@@ -605,7 +653,7 @@
 (defn delete-by-id-with-minimum-history!
   "Delete the row `id`.
    The last history entry will not be optimal.
-   Workaround, read the record first, use delete-by-id.
+   The existing record will not be read before.
    We do not care if anyone has updated or deleted the row just before."
   [id]
   (sql/with-db-transaction [conn *db*]
@@ -626,7 +674,7 @@
 
 (defn delete-by-id!
   "Delete the row `id`.
-   Make sure history is perfect by reading the record first.
+   It will make sure the history is perfect by reading the record first (= 2 SQL operations).
    We do not care if anyone has updated or deleted the row just before."
   [id]
   (if-let [m (try-get id)]
@@ -641,6 +689,11 @@
                               :userid   nil,         :sessionid nil,                   :comment nil})
         (delete-indexes-without-data! conn id)
         nil))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Read history records from database
+;;
+;; The history records describe all operations applied to a single record `id`.
 
 (defn- deserialize-history
   "Deserialize the :before and :after keys of `m`."
@@ -680,10 +733,11 @@
   (history-by-entity :unknown))
 
 
-;; this operation is most likely much faster for long histories since:
-;; 1. no deserialization of :data
-;; 2. InnoDB puts only 767 bytes of a TEXT or BLOB inline, the rest goes into some other block.
-;;    This is a compromise that sometimes helps, sometimes hurts performance.
+;; `history-short` operation is most likely much faster for long histories since:
+;;
+;; * no deserialization of :data
+;; * InnoDB puts only 767 bytes of a TEXT or BLOB inline, the rest goes into some other block.
+;;   This is a compromise that sometimes helps, sometimes hurts performance.
 (s/fdef history-short
         :args (s/cat :id ::id)
         :ret  (s/* ::stored-history-short))
@@ -696,10 +750,11 @@
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; # Validation of database
 ;;;
-;;; validation of database
-;;;
-;;; step 1: ensure latest and index are in sync
+;;; * Make sure record and SQL row are in sync (See above). (DONE)
+;;; * Ensure latest and index are in sync. (DONE)
+;;; * Reconstruct latest from history, to make sure history is correct. (NOT DONE)
 
 (s/fdef verify-stored-data
         :args (s/cat :id ::id)
@@ -736,5 +791,8 @@
   []
   (let [ids (map :id (cmd/select-all-latest))]
     (verify-these ids)))
+
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (orchestra.spec.test/instrument)
