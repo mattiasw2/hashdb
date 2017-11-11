@@ -69,6 +69,7 @@
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
   []
+  (println ".")
   (migrations/migrate ["reset"] (select-keys env [:database-url])))
 
 
@@ -121,7 +122,7 @@
 (defn by-keys
   [ms]
   (->>
-   (for [k possible-keys]
+   (for [k ms]
      [k (map #(select-keys % [:id k])(filter (fn [m] (k m)) ms))])
    (into {})))
 
@@ -142,7 +143,7 @@
         (assert (some? expected))
         ;; this code will only work if we have 1 thread
         (let [hits (select-by-string :unknown k expected)]
-          (is (= (count hits)(count ms))))))))
+          (assert (= (count hits)(count ms))))))))
 
 
 
@@ -159,17 +160,34 @@
         _ (hashdb.db.commands/verify-these ids)
         _ (when single (verify-indexes saved-m3s))
         saved-m4s (timed "delete" (mapv #(delete! %) saved-m3s))
-        _ (hashdb.db.commands/verify-these ids)
-        _ (when single (verify-indexes saved-m4s))]))
+        ;; todo: verify-indexes after delete by usong saved-m3s and make sure nothing is found
+        _ (hashdb.db.commands/verify-these ids)]))
 
+
+
+(s/fdef test-many
+        :args (s/cat :samples (s/coll-of :hashdb.db.commands/data))
+        :ret  nil?)
 
 (defn test-many
   "Test 1 thread."
-  [& [n]]
+  [samples]
   (clear-database)
-  (let [n (or n 1000)
-        samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
-    (test-many-continue samples true)))
+  (test-many-continue samples true))
+
+(def ^:dynamic src nil)
+(defn test-many-n
+  [n]
+  (let [d (mapv first (s/exercise :hashdb.db.commands/data n))]
+    (def src d)
+    (test-many d)))
+
+;; I cannot run this in multiple-thread, and inside check there is a pmap.
+;; So I am testing check-fn instead.
+;; https://spootnik.org/entries/2017/01/09/an-adventure-with-clocks-component-and-spec/
+(defn check-test-many
+  []
+  (stest/check-fn `test-many (s/fspec :args (s/cat :samples (s/coll-of :hashdb.db.commands/data)) :ret  nil?)))
 
 ;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
 ;; in create!
