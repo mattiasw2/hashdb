@@ -24,6 +24,13 @@
             <pattern>%date{ISO8601} [%thread] %-5level %logger{36} - %msg %n</pattern>
         </encoder>
     </appender>
+    <!-- mattias: do not log migrations -->
+    <logger name="migratus.migrations" level="warn" />
+    <logger name="migratus.database" level="warn" />
+    <logger name="migratus.migration.sql" level="warn" />
+    <logger name="migratus.core" level="warn" />
+
+    <!-- default -->
     <logger name="org.apache.http" level="warn" />
     <logger name="org.xnio.nio" level="warn" />
     <logger name="com.zaxxer.hikari" level="warn" />
