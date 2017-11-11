@@ -142,8 +142,12 @@
       (doseq [[expected ms] by-value]
         (assert (some? expected))
         ;; this code will only work if we have 1 thread
-        (let [hits (select-by-string :unknown k expected)]
-          (assert (= (count hits)(count ms))))))))
+        (let [hits (select-by-string :unknown k expected)
+              hits-set (into #{} (map :id hits))
+              ms-set (into #{} (map :id ms))]
+          (assert (and
+                   (= (count hits)(count ms))
+                   (= hits-set ms-set))))))))
 
 
 
@@ -153,13 +157,21 @@
         ids (map :id saved-m2s)
         _ (hashdb.db.commands/verify-these ids)
         _ (when single (verify-indexes saved-m2s))
+
+        ;; todo, maybe we shouldn't update them all
         saved-m3s0 (timed "update" (mapv #(update! % (create-update-operation %)) saved-m2s))
         _ (hashdb.db.commands/verify-these ids)
         _ (when single (verify-indexes saved-m3s0))
         saved-m3s (timed "update-2" (mapv #(update! % (create-update-operation %)) saved-m3s0))
         _ (hashdb.db.commands/verify-these ids)
         _ (when single (verify-indexes saved-m3s))
-        saved-m4s (timed "delete" (mapv #(delete! %) saved-m3s))
+
+        ;; for delete, make a number of deletes, and verify we didn't destroy the rest
+        [left right] (split-at (/ (count saved-m3s) 3) saved-m3s)
+        _ (timed "delete" (mapv #(delete! %) left))
+        _ (hashdb.db.commands/verify-these ids)
+        _ (when single (verify-indexes right))
+        _ (timed "delete" (mapv #(delete! %) right))
         ;; todo: verify-indexes after delete by usong saved-m3s and make sure nothing is found
         _ (hashdb.db.commands/verify-these ids)]))
 

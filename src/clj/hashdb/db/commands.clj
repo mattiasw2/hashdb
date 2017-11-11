@@ -195,7 +195,8 @@
                        ;; ::i1 ::i2
                        ::s4]))
     (s/def ::data
-      (s/merge (s/map-of ::short-keyword any?) ::indexed-data))))
+      ;; ::indexed-data should be first, it created samples without any :s1 :s2 :s3 :s4
+      (s/merge ::indexed-data (s/map-of ::short-keyword any?)))))
 
 ;; for changes, it is okay to set nil, which means remove key
 (s/def ::changes
