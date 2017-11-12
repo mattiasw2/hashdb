@@ -160,14 +160,16 @@
 ;;       (gen/string-alphanumeric)))
 ;;     => (: :n : :mi0 :1 :90G : :qDAv :5VDc :11)
 (s/def ::short-keyword
-  (s/with-gen keyword? #(gen/fmap (fn [k] (keyword (let [str (substring+ k 0 4)] (if (empty? str) "s1" str))))
+  (s/with-gen keyword? #(gen/fmap (fn [k] (keyword (let [str (substring+ k 0 4)]
+                                                     (if (empty? str) "s1" str))))
                                   (gen/string-alphanumeric))))
 
-(s/def ::datetime (dev-with-gen #(or
-                                  ;; mysql select returns joda-time
-                                  (instance? org.joda.time.DateTime %)
-                                  (instance? java.util.Date %))
-                                #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
+(s/def ::datetime (dev-with-gen
+                   #(or
+                     ;; mysql select returns joda-time
+                     (instance? org.joda.time.DateTime %)
+                     (instance? java.util.Date %))
+                   #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
 
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/and string? #(<= (count %) 36)))
@@ -234,7 +236,8 @@
 
 ;; The history record.
 (s/def ::stored-history
-  (s/keys :req-un [::id ::entity ::deleted ::before ::after ::updated ::version ::parent]
+  (s/keys :req-un [::id ::entity ::deleted ::before ::after
+                   ::updated ::version ::parent]
           :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
 ;; The history record without the data.
@@ -293,7 +296,9 @@
   [changes [idx-types idx-keys]]
   (if-not changes {}
           (let [changes-relevant (select-keys changes idx-keys)
-                changes-grouped  (mapify-values (group-by #(idx-types (key %)) changes-relevant))]
+                changes-grouped  (mapify-values
+                                  (group-by #(idx-types (key %))
+                                            changes-relevant))]
             changes-grouped)))
 
 
@@ -316,35 +321,46 @@
   (let [keys-before (set (keys before))
         keys-changes0 (set (keys changes))
         disappeared(clojure.set/difference keys-before keys-changes0)
-        _ (assert (empty? disappeared) (str "Illegal update, the following keys needs to be part of changes" (str disappeared)))
+        _ (assert (empty? disappeared)
+                  (str "Illegal update, the following keys needs to be part of changes"
+                       (str disappeared)))
         tmp (group-by #(nil? (second %)) changes)
         map-changes (clojure.core/get tmp false)
         map-deleted (clojure.core/get tmp true)
         key-changes (keys map-changes)
-        should-be-updated (clojure.set/intersection (set key-changes) keys-before)
-        should-be-created (clojure.set/difference (set (keys map-changes)) keys-before)]
+        should-be-updated (clojure.set/intersection
+                           (set key-changes) keys-before)
+        should-be-created (clojure.set/difference
+                           (set (keys map-changes)) keys-before)]
     (when (= :string typ)
       ;; Sort to minimize risk of deadlock
-      ;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+      ;; MySQLTransactionRollbackException Deadlock found when trying to get lock;
+      ;; try restarting transaction:
+      ;; com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+      ;;
       ;; Todo: If it still happends, I have to sort delete+create+update according to :k
       (doseq [[k v] (sort map-deleted)]
         ;; v = nil means deleted
         (assert (nil? v))
-        (let [res (cmd/delete-single-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)})]
+        (let [res (cmd/delete-single-string-index!
+                   conn {:id id, :entity (str-edn entity), :k (str-edn k)})]
           (assert (= 1 res))))
 
       (doseq [k (sort should-be-created)]
-        ;; no point in adding nil:s to index, so should never happen, even if has nil value
+        ;; no point in adding nil:s to index, so should never happen,
+        ;; even if has nil value
         (assert (k changes))
-        (let [res (cmd/create-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)
-                                                  :index_data (str-index (k changes))})]
+        (let [res (cmd/create-string-index!
+                   conn {:id id, :entity (str-edn entity), :k (str-edn k)
+                         :index_data (str-index (k changes))})]
           (assert (= 1 res))))
       (doseq [k (sort should-be-updated)]
         ;; update to nil, same as deleting (but this case should not happen
         ;; since then changes will not fulfil ::data)
         (assert (k changes))
-        (cmd/update-string-index! conn {:id id, :entity (str-edn entity), :k (str-edn k)
-                                        :index_data (str-index (k changes))}))))
+        (cmd/update-string-index!
+         conn {:id id, :entity (str-edn entity), :k (str-edn k)
+               :index_data (str-index (k changes))}))))
   nil)
 
 
@@ -440,12 +456,14 @@
         data       (str-edn m)]
     (sql/with-db-transaction [conn *db*]
       (cmd/create-latest! conn
-                          {:id id0 :entity entity-str :data data :updated now0 :parent 0 :version version})
+                          {:id      id0  :entity entity-str :data    data
+                           :updated now0 :parent 0          :version version})
       (cmd/create-history! conn
-                           {:id       id0,  :entity    entity-str, :deleted 0, :before empty-map-edn, :after data,
-                            :updated  now0, :version   version,    :parent  0,
+                           {:id       id0,           :entity    entity-str, :deleted 0,
+                            :before   empty-map-edn, :after     data,
+                            :updated  now0,          :version   version,    :parent  0,
                             :is_merge 0,
-                            :userid   nil,  :sessionid nil,        :comment nil})
+                            :userid   nil,           :sessionid nil,        :comment nil})
       (update-indexes! conn :create m {} m)
       m)))
 
@@ -562,7 +580,8 @@
 (defn select-by-string
   "Return all rows of type `entity` where `k` is exactly the string `search`."
   [entity k search]
-  (let [res (cmd/select-by-string-index {:entity (str-edn entity) :k (str-edn k) :index_data (str-index search)})]
+  (let [res (cmd/select-by-string-index {:entity (str-edn entity) :k (str-edn k)
+                                         :index_data (str-index search)})]
     (map extract-row res)))
 
 
@@ -583,7 +602,8 @@
   (assert (and (some? (:version m))(>= (:version m) 1)) "Version 0 should be create:d!")
   (let [id         (nn (:id m))
         parent     (nn (:version m))
-        ;; for the non-acid update, (inc parent) will not do, maybe I need to using timestamp again
+        ;; for the non-acid update, (inc parent) will not do,
+        ;; maybe I need to using timestamp again
         version    (inc parent)
         updated    (now)
         before     (select-keys m (keys changes))
@@ -591,20 +611,26 @@
         data-str   (str-edn data)
         entity-str (str-edn (:entity m))]
     (sql/with-db-transaction [conn *db*]
-      (let [affected (cmd/update-latest! conn {:id id :parent parent :updated updated :version version :data data-str})]
-        (cond (= 0 affected) (throw (ex-info (str "Row " id " has been updated since read " parent)
-                                             {:id id :updated parent}))
-              (> affected 1) (throw (ex-info (str "Row " id " existed several times in db.")
-                                             {:id id :updated parent})))
+      (let [affected (cmd/update-latest!
+                      conn {:id      id      :parent parent :updated updated
+                            :version version :data   data-str})]
+        (cond (= 0 affected)
+              (throw (ex-info (str "Row " id " has been updated since read " parent)
+                              {:id id :updated parent}))
+              (> affected 1)
+              (throw (ex-info (str "Row " id " existed several times in db.")
+                              {:id id :updated parent})))
 
         ;; why not in a transaction? since insert, it cannot fail.
-        ;; and for non-acid-update, the history is the long-term truth, not the latest entry
-        (cmd/create-history! conn
-                             {:id       id,               :entity    entity-str, :deleted 0,
-                              :before   (str-edn before), :after     (str-edn changes),
-                              :updated  updated,          :version   version,    :parent  parent,
-                              :is_merge 0,
-                              :userid   nil,              :sessionid nil,        :comment nil})
+        ;; and for non-acid-update, the history is the long-term truth,
+        ;; not the latest entry
+        (cmd/create-history!
+         conn
+         {:id       id,               :entity    entity-str, :deleted 0,
+          :before   (str-edn before), :after     (str-edn changes),
+          :updated  updated,          :version   version,    :parent  parent,
+          :is_merge 0,
+          :userid   nil,              :sessionid nil,        :comment nil})
         (update-indexes! conn :update m before changes))
       data)))
 
@@ -636,12 +662,13 @@
   (sql/with-db-transaction [conn *db*]
     (let [affected   (cmd/delete-latest! conn m)
           entity-str (str-edn (:entity m))]
-      (cmd/create-history! conn
-                           {:id       (:id m),     :entity    entity-str,         :deleted 1,
-                            :before   (str-edn m), :after     empty-map-edn,
-                            :updated  (now),       :version   (inc (:version m)), :parent  (:version m),
-                            :is_merge 0,
-                            :userid   nil,         :sessionid nil,                :comment nil})
+      (cmd/create-history!
+       conn
+       {:id       (:id m),     :entity    entity-str,         :deleted 1,
+        :before   (str-edn m), :after     empty-map-edn,
+        :updated  (now),       :version   (inc (:version m)), :parent  (:version m),
+        :is_merge 0,
+        :userid   nil,         :sessionid nil,                :comment nil})
       (update-indexes! conn :delete m m {})
       nil)))
 
@@ -658,12 +685,13 @@
   [id]
   (sql/with-db-transaction [conn *db*]
     (let [affected (cmd/delete-latest! conn {:id id})]
-      (cmd/create-history! conn
-                           {:id       id,            :entity    (str-edn :unknown), :deleted 1,
-                            :before   empty-map-edn, :after     empty-map-edn,
-                            :updated  (now),         :version   2000000001,         :parent  2000000000,
-                            :is_merge 0,
-                            :userid   nil,           :sessionid nil,                :comment nil})
+      (cmd/create-history!
+       conn
+       {:id       id,            :entity    (str-edn :unknown), :deleted 1,
+        :before   empty-map-edn, :after     empty-map-edn,
+        :updated  (now),         :version   2000000001,         :parent  2000000000,
+        :is_merge 0,
+        :userid   nil,           :sessionid nil,                :comment nil})
       (delete-indexes-without-data! conn id)
       nil)))
 
@@ -681,12 +709,13 @@
     (sql/with-db-transaction [conn *db*]
       (let [affected (cmd/delete-latest! conn {:id (:id m)})
             version  (:version m)]
-        (cmd/create-history! conn
-                             {:id       (:id m),     :entity    (str-edn (:entity m)), :deleted 1,
-                              :before   (str-edn m), :after     empty-map-edn,
-                              :updated  (now),       :version   (inc version),         :parent  version,
-                              :is_merge 0,
-                              :userid   nil,         :sessionid nil,                   :comment nil})
+        (cmd/create-history!
+         conn
+         {:id       (:id m),     :entity    (str-edn (:entity m)), :deleted 1,
+          :before   (str-edn m), :after     empty-map-edn,
+          :updated  (now),       :version   (inc version),         :parent  version,
+          :is_merge 0,
+          :userid   nil,         :sessionid nil,                   :comment nil})
         (delete-indexes-without-data! conn id)
         nil))))
 
@@ -766,12 +795,17 @@
   [id]
   (let [m           (try-get id)
         idxs        (cmd/select-string-index {:id id})
-        idxs-as-map (into {} (map (fn [idx] [(clojure.edn/read-string (:k idx))(:index_data idx)]) idxs))]
+        idxs-as-map (into {}
+                          (map (fn [idx] [(clojure.edn/read-string (:k idx))
+                                          (:index_data idx)])
+                               idxs))]
     (if m
       (let [idx-info    (indexes m)
             idx-values  (select-keys m (second idx-info))
             diff        (keep-difference-by-type m idx-info)]
-        (and (or (zero? (count idxs)) (= (:entity m) (clojure.edn/read-string (:entity (first idxs)))))
+        (and (or (zero? (count idxs))
+                 (= (:entity m)
+                    (clojure.edn/read-string (:entity (first idxs)))))
              (= (count idxs) (count idxs-as-map))
              (= (count idxs) (count idx-values))
              (empty? (map-difference idxs-as-map idx-values))))
