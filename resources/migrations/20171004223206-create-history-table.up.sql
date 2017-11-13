@@ -1,5 +1,6 @@
 CREATE TABLE `history`
 (`id` VARCHAR(36) NOT NULL,
+ `tenant` VARCHAR(36) NOT NULL,
  `entity` VARCHAR(36) NOT NULL,
  `deleted` BOOLEAN NOT NULL,
 -- before {} after first insert

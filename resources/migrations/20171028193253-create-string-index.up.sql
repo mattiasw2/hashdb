@@ -1,3 +1,5 @@
+-- no tenant column, since entity will not be shared between tenant
+
 CREATE TABLE `string_index` (
   `id` VARCHAR(36) NOT NULL,
   `entity` VARCHAR(36) NOT NULL,

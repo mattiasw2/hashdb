@@ -1,41 +1,53 @@
 -- :name create-latest! :! :n
 -- :doc creates a new latest record
 INSERT INTO latest
-(id, entity, data, updated, version, parent)
-VALUES (:id, :entity, :data, :updated, :version, :parent)
+(id, tenant, entity, data, updated, version, parent)
+VALUES (:id, :tenant, :entity, :data, :updated, :version, :parent)
 
 -- :name update-latest! :! :n
 -- :doc update an existing latest record
 UPDATE latest
 SET data = :data, updated = :updated, parent = :parent, version = :version
-WHERE id = :id and version = :parent
+WHERE id = :id and version = :parent and tenant = :tenant
 -- WHERE id = :id
 -- tz problem WHERE id = :id and updated = :parent
 
 -- :name get-latest :? :1
 -- :doc retrieve a latest given the id.
-SELECT id, entity, version, data, updated FROM latest
+SELECT id, tenant, entity, version, data, updated FROM latest
 WHERE id = :id
 
 -- :name select-all-latest :? :*
 -- :doc retrieve all rows
-SELECT id, entity, version, data, updated FROM latest
+SELECT id, tenant, entity, version, data, updated FROM latest
+WHERE tenant = :tenant
 
 -- :name select-all-latest-by-entity :? :*
 -- :doc retrieve all rows
-SELECT id, entity, version, data, updated FROM latest
-where entity = :entity
+SELECT id, tenant, entity, version, data, updated FROM latest
+WHERE entity = :entity AND tenant = :tenant
 
 
 -- :name select-all-latest-null-entity :? :*
 -- :doc retrieve all rows
-SELECT id, entity, version, data, updated FROM latest
-where entity is null
+SELECT id, tenant, entity, version, data, updated FROM latest
+WHERE entity IS NULL AND tenant = :tenant
 
 
 -- :name select-by-string-index :? :*
 -- :doc retrieve all rows
-SELECT l.id, l.entity, l.version, l.data, l.updated
+SELECT l.id, l.tenant, l.entity, l.version, l.data, l.updated
+FROM   latest as l , string_index as si
+WHERE  l.entity  = :entity
+AND    l.tenant  = :tenant
+AND    si.entity = :entity
+AND    l.id      = si.id
+AND    si.k      = :k
+AND    si.index_data = :index_data
+
+-- :name select-by-string-index-global :? :*
+-- :doc retrieve all rows
+SELECT l.id, l.tenant, l.entity, l.version, l.data, l.updated
 FROM   latest as l , string_index as si
 WHERE  l.entity  = :entity
 AND    si.entity = :entity
@@ -53,8 +65,8 @@ WHERE id = :id
 -- :name create-history! :! :n
 -- :doc creates a new history record
 INSERT INTO history
-(id, entity, `deleted`, `before`, `after`, updated, version, parent, is_merge, userid, sessionid, comment)
-VALUES (:id, :entity, :deleted, :before, :after, :updated, :version, :parent, :is_merge, :userid, :sessionid, :comment)
+(id, tenant, entity, `deleted`, `before`, `after`, updated, version, parent, is_merge, userid, sessionid, comment)
+VALUES (:id, :tenant, :entity, :deleted, :before, :after, :updated, :version, :parent, :is_merge, :userid, :sessionid, :comment)
 
 
 -- :name select-history :? :*
@@ -67,12 +79,14 @@ WHERE ID = :id
 -- :doc retrieve all history rows for a latest entry
 SELECT * FROM history
 WHERE entity = :entity
+AND   tenant = :tenant
 
 
 -- :name select-history-null-entity :? :*
 -- :doc retrieve all history rows for a latest entry
 SELECT * FROM history
 WHERE entity is null
+AND   tenant = :tenant
 
 
 -- :name select-history-short :? :*
@@ -133,5 +147,5 @@ WHERE ID = :id
 
 -- :name find-string-index :? :*
 -- :doc retrieve all entity and id that matches index_data and entity
-SELECT entity, id FROM string_index
-WHERE entity = :entity AND k = :k AND index_data = :index_data
+-- SELECT entity, id FROM string_index
+-- WHERE entity = :entity AND k = :k AND index_data = :index_data
