@@ -17,6 +17,63 @@
             BatchUpdateException
             PreparedStatement]))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Tenant
+;;
+;; The database is shared between different tenants. A tenant
+;; should never see data from another tennant.
+;; Normally, you should never look into the database without
+;; knowing the tenant. The only exceptions are
+;;  * You do not know the tenant yet, typically the login page.
+;;  * It is a single tenant system, then set tennant to "*single*"
+;;
+;; Most operations are not ok unless *tenant* is non-nil.
+;;
+;;
+
+(s/def ::tenant
+  (s/or :single #{:single}       ;single-tenant usage
+        :global #{:global}       ;any tenant allowed, really dangerous
+        :tenant string?))        ;the current tenant
+
+
+;; The only allowed top-level value of *tenant* is nil or :single,
+;; where nil should never be read, if it is, something is wrong.
+(def ^:dynamic *tenant* nil)
+
+(defmacro with-*tenant*
+  "Bind *tenant* to `tenant` and execute `forms`."
+  [tenant & forms]
+  `(binding [*tenant* ~tenant]
+     ~@forms))
+
+
+(s/fdef tenant->str
+        :args (s/cat :tenant ::tenant)
+        :ret  string?)
+
+;; Wouldn't it be better to use spec for checking below? Now, the
+;; code is duplicated. It is as if some spec:s should always be
+;; vaidated, not just during development.
+(defn tenant->str
+  "Return the `tenant` so that it can be stored in db."
+  [tenant]
+  (cond (= tenant :single) "1"
+        (= tenant :global) (throw (Exception. ":global tenant is never allowed to be stored in db"))
+        (nil? tenant)      (throw (Exception. "tenant is never allowed to be nil."))
+        (string? tenant)   tenant
+        true               (throw (Exception. (str tenant " as tenant is not allowed.")))))
+
+
+(s/fdef str->tenant
+        :args (s/cat :tenant string?)
+        :ret  ::tenant)
+
+(defn str->tenant
+  "Return the `str` as a proper tenant value."
+  [str]
+  (cond (= str "1") :single
+        true        str))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -470,6 +527,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # Verify duplicated data in SQL-table row and inside record `m` are identical.
 
+;; JDK8 has a new time library: https://github.com/dm3/clojure.java-time
 (defn max-1-second-diff
   "joda time and java time seems to be slightly different.
    If they are at most 1s apart, assume equal."
