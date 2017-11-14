@@ -218,9 +218,15 @@
       (clear-database)
       (->>
        (range par)
-       (mapv (fn [_]
+       (mapv (fn [idx]
                (Thread/sleep delay)
-               (future (test-many-continue samples (= par 1)))))
+               ;; it seems as if a future call also get the active thread-bindings.
+               ;; in any normal language, I would have to have the with-tenant part inside the future
+               ;; the with-tenant is only needed if we have several tenants, otherwise it will work
+               (if (= par 1)
+                 (future (test-many-continue samples (= par 1)))
+                 (with-tenant (str idx)
+                   (future (test-many-continue samples (= par 1)))))))
        (mapv deref))
       (println "Finished"))))
 
@@ -362,7 +368,7 @@
 
 (deftest test-verify-row-in-sync
   (with-tenant :single
-    (is (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f" :tenant "1"} {:updated (now) :entity :f :tenant :single}))
+    (is (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f" :tenant SINGLE-TENANT} {:updated (now) :entity :f :tenant :single}))
     (let [start (now)]
       (Thread/sleep 1100)
       (is (thrown?

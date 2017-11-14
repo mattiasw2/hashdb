@@ -52,13 +52,16 @@
         :args (s/cat :tenant ::tenant)
         :ret  string?)
 
+;; the tenant name for :single
+(def SINGLE-TENANT "!")
+
 ;; Wouldn't it be better to use spec for checking below? Now, the
 ;; code is duplicated. It is as if some spec:s should always be
 ;; vaidated, not just during development.
 (defn tenant->str
   "Return the `tenant` so that it can be stored in db."
   [tenant]
-  (cond (= tenant :single) "1"
+  (cond (= tenant :single) SINGLE-TENANT
         (= tenant :global) (throw (Exception. ":global tenant is never allowed to be stored in db"))
         (nil? tenant)      (throw (Exception. "tenant is never allowed to be nil."))
         (string? tenant)   tenant
@@ -72,7 +75,7 @@
 (defn str->tenant
   "Return the `str` as a proper tenant value."
   [str]
-  (cond (= str "1") :single
+  (cond (= str SINGLE-TENANT) :single
         true        str))
 
 
