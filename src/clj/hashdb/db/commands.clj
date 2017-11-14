@@ -41,7 +41,7 @@
 ;; where nil should never be read, if it is, something is wrong.
 (def ^:dynamic *tenant* nil)
 
-(defmacro with-*tenant*
+(defmacro with-tenant
   "Bind *tenant* to `tenant` and execute `forms`."
   [tenant & forms]
   `(binding [*tenant* ~tenant]
@@ -62,7 +62,7 @@
         (= tenant :global) (throw (Exception. ":global tenant is never allowed to be stored in db"))
         (nil? tenant)      (throw (Exception. "tenant is never allowed to be nil."))
         (string? tenant)   tenant
-        true               (throw (Exception. (str tenant " as tenant is not allowed.")))))
+        true               (throw (Exception. (str "'" tenant "' as tenant is not allowed.")))))
 
 
 (s/fdef str->tenant
@@ -74,6 +74,47 @@
   [str]
   (cond (= str "1") :single
         true        str))
+
+
+(s/fdef verify-tenant-read
+        :args (s/cat :tenant ::tenant)
+        :ret  boolean?)
+
+(defn verify-tenant-read
+  "Unless `*tenant*` is :global, `tenant` and `*tenant*` must be equal."
+  [tenant]
+  (if (= :global *tenant*)
+    true
+    (if (= tenant *tenant*) true
+        (throw (Exception. (str "Read for Tenant '" tenant "' is not allowed when *tenant* is '" *tenant* "'"))))))
+
+
+(s/fdef verify-tenant-write
+        :args (s/cat :tenant ::tenant)
+        :ret  boolean?)
+
+(defn verify-tenant-write
+  "If `*tenant*` is :global, the writing is not allowed.
+  `tenant` and `*tenant*` must be equal."
+  [tenant]
+  (if (or (nil? *tenant*)(= :global *tenant*)(nil? tenant))
+    (throw (Exception. (str "Write for tenant '" tenant "' is not allowed when *tenant* is '" *tenant* "'")))
+    (if (= tenant *tenant*)
+      true
+      (throw (Exception. (str "Write for Tenant '" tenant "' is not allowed when *tenant* is '" *tenant* "'"))))))
+
+
+(s/fdef get-tenant
+        :args (s/cat)
+        :ret  ::tenant)
+
+(defn get-tenant
+  "Unless `*tenant*` is :global or nil, we can use `*tenant*` as tenant."
+  []
+  (if (or (nil? *tenant*) (= :global *tenant*))
+    (throw (Exception. (str "Read without explicit tenant not allowed when *tenant* is '" *tenant* "'")))
+    *tenant*))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -289,17 +330,18 @@
 ;; TODO: where is ::data?
 (s/def ::stored-latest
   (s/keys :req-un [::id ::entity ::updated ::version]
-          :opt-un []))
+          ;; ::tenant optional since optional for create!
+          :opt-un [::tenant]))
 
 ;; The history record.
 (s/def ::stored-history
-  (s/keys :req-un [::id ::entity ::deleted ::before ::after
+  (s/keys :req-un [::id ::tenant ::entity ::deleted ::before ::after
                    ::updated ::version ::parent]
           :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
 ;; The history record without the data.
 (s/def ::stored-history-short
-  (s/keys :req-un [::id  ::entity ::deleted ::updated ::version ::parent]
+  (s/keys :req-un [::id ::tenant ::entity ::deleted ::updated ::version ::parent]
           :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -323,6 +365,7 @@
 (defn indexes
   "Depending on the entity and other fields in `m`, return the indexes.
    Only non-nil values will be indexed."
+  ;; TODO: depends on (get-tenant)
   [m]
   (let [raw {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
              :i1 :long, :i2 :long}]
@@ -379,8 +422,7 @@
         keys-changes0 (set (keys changes))
         disappeared(clojure.set/difference keys-before keys-changes0)
         _ (assert (empty? disappeared)
-                  (str "Illegal update, the following keys needs to be part of changes"
-                       (str disappeared)))
+                  (str "Illegal update, the following keys needs to be part of changes" disappeared))
         tmp (group-by #(nil? (second %)) changes)
         map-changes (clojure.core/get tmp false)
         map-deleted (clojure.core/get tmp true)
@@ -417,8 +459,8 @@
         (assert (k changes))
         (cmd/update-string-index!
          conn {:id id, :entity (str-edn entity), :k (str-edn k)
-               :index_data (str-index (k changes))}))))
-  nil)
+               :index_data (str-index (k changes))})))
+    nil))
 
 
 ;; For delete, we can just delete all index entries at once
@@ -505,22 +547,26 @@
    Return the map incl the potentially created id."
   [m]
   (let [id0        (or (:id m) (uuid))
+        tenant     (or (:tenant m) (get-tenant))
+        tenant-str (tenant->str tenant)
+        _          (verify-tenant-write tenant)
         entity     (or (:entity m) :unknown)
         entity-str (str-edn entity)
         now0       (now)
         version    1
-        m          (into m {:id id0 :updated now0 :version version :entity entity})
+        m          (into m {:id id0 :tenant tenant :updated now0 :version version :entity entity})
         data       (str-edn m)]
     (sql/with-db-transaction [conn *db*]
       (cmd/create-latest! conn
-                          {:id      id0  :entity entity-str :data    data
+                          {:id      id0  :tenant tenant-str :entity  entity-str
+                           :data    data
                            :updated now0 :parent 0          :version version})
       (cmd/create-history! conn
-                           {:id       id0,           :entity    entity-str, :deleted 0,
-                            :before   empty-map-edn, :after     data,
-                            :updated  now0,          :version   version,    :parent  0,
+                           {:id       id0,  :tenant    tenant-str     :entity  entity-str,
+                            :deleted  0,    :before    empty-map-edn, :after   data,
+                            :updated  now0, :version   version,       :parent  0,
                             :is_merge 0,
-                            :userid   nil,           :sessionid nil,        :comment nil})
+                            :userid   nil,  :sessionid nil,           :comment nil})
       (update-indexes! conn :create m {} m)
       m)))
 
@@ -529,7 +575,7 @@
 
 ;; JDK8 has a new time library: https://github.com/dm3/clojure.java-time
 (defn max-1-second-diff
-  "joda time and java time seems to be slightly different.
+  "mySQL-time (joda time) and java time seems to be slightly different.
    If they are at most 1s apart, assume equal."
   [t1 t2]
   (let [diff (t/in-millis (if (t/before? t1 t2)(t/interval t1 t2)(t/interval t2 t1)))]
@@ -543,12 +589,13 @@
   [row m]
   (assert (and (= (:id row)(:id m))
                (= (:version row)(:version m))
+               (= (:tenant row)(tenant->str (:tenant m)))
                (= (:entity row)(str-edn (:entity m)))
                ;; https://stackoverflow.com/questions/15333320/how-to-convert-joda-time-datetime-to-java-util-date-and-vice-versa
                (let [m-updated (org.joda.time.DateTime. (:updated m))
                      row-updated (:updated row)]
                  (max-1-second-diff m-updated row-updated)))
-          "id, entity, updated, and/or version and data columns in table latest are not in sync.")
+          "id, tenant, entity, updated, and/or version and data columns in table latest are not in sync.")
   m)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -567,8 +614,9 @@
   [id row]
   (let [row (cmd/get-latest {:id id})
         m   (extract-row row)]
-    (when row (assert (and (= id (:id row)))
-                      "id and/or version and data columns in table latest are not in sync."))
+    (when row (assert (and (= id (:id row))
+                           (verify-tenant-read (:tenant m)))
+                      "id and/or tenant, version and data columns in table latest are not in sync."))
     m))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -592,7 +640,7 @@
   "Return map at `id`, exception if not found."
   [id]
   (let [m (try-get id)]
-    (if m m (throw (ex-info (str "Row with id " id " missing!")
+    (if m m (throw (ex-info (str "Row with id '" id "' missing!")
                             {:id id})))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -606,7 +654,7 @@
   "Return all rows."
   []
   (map #(try-get-internal (:id %) %)
-       (cmd/select-all-latest)))
+       (cmd/select-all-latest {:tenant (tenant->str (get-tenant))})))
 
 
 (s/fdef select-all-by-entity
@@ -617,7 +665,8 @@
   "Return all rows for a given `entity`."
   [entity]
   (map #(try-get-internal (:id %) %)
-       (cmd/select-all-latest-by-entity {:entity (str-edn entity)})))
+       (cmd/select-all-latest-by-entity {:tenant (tenant->str (get-tenant))
+                                         :entity (str-edn entity)})))
 
 
 (s/fdef select-all-nil-entity
@@ -638,8 +687,22 @@
 (defn select-by-string
   "Return all rows of type `entity` where `k` is exactly the string `search`."
   [entity k search]
-  (let [res (cmd/select-by-string-index {:entity (str-edn entity) :k (str-edn k)
+  (let [res (cmd/select-by-string-index {:tenant (tenant->str (get-tenant))
+                                         :entity (str-edn entity) :k (str-edn k)
                                          :index_data (str-index search)})]
+    (map extract-row res)))
+
+
+(s/fdef select-by-string-global
+        :args (s/cat :entity ::entity :k ::k :search string?)
+        :ret  (s/* ::stored-latest))
+
+(defn select-by-string-global
+  "Return all rows of type `entity` where `k` is exactly
+   the string `search` regardless of tenant."
+  [entity k search]
+  (let [res (cmd/select-by-string-index-global {:entity (str-edn entity) :k (str-edn k)
+                                                :index_data (str-index search)})]
     (map extract-row res)))
 
 
@@ -656,9 +719,13 @@
    Return the new map, or throw exception if update fails."
   [m changes]
   (assert (nil? (:id changes)) "Changing :id is not allowed!")
+  (assert (nil? (:tenant changes)) "Changing :tenant is not allowed!")
   (assert (nil? (:entity changes)) "Changing :entity is not allowed!")
   (assert (and (some? (:version m))(>= (:version m) 1)) "Version 0 should be create:d!")
   (let [id         (nn (:id m))
+        tenant     (nn (:tenant m))
+        tenant-str (tenant->str tenant)
+        _          (verify-tenant-write tenant)
         parent     (nn (:version m))
         ;; for the non-acid update, (inc parent) will not do,
         ;; maybe I need to using timestamp again
@@ -670,13 +737,14 @@
         entity-str (str-edn (:entity m))]
     (sql/with-db-transaction [conn *db*]
       (let [affected (cmd/update-latest!
-                      conn {:id      id      :parent parent :updated updated
-                            :version version :data   data-str})]
+                      conn {:id      id      :tenant  tenant-str
+                            :parent  parent  :updated updated
+                            :version version :data    data-str})]
         (cond (= 0 affected)
-              (throw (ex-info (str "Row " id " has been updated since read " parent)
+              (throw (ex-info (str "Row '" id "' has been updated since read '" parent "'")
                               {:id id :updated parent}))
               (> affected 1)
-              (throw (ex-info (str "Row " id " existed several times in db.")
+              (throw (ex-info (str "Row '" id "' existed several times in db.")
                               {:id id :updated parent})))
 
         ;; why not in a transaction? since insert, it cannot fail.
@@ -684,11 +752,12 @@
         ;; not the latest entry
         (cmd/create-history!
          conn
-         {:id       id,               :entity    entity-str, :deleted 0,
+         {:id       id,               :tenant    tenant-str
+          :entity   entity-str,       :deleted   0,
           :before   (str-edn before), :after     (str-edn changes),
-          :updated  updated,          :version   version,    :parent  parent,
+          :updated  updated,          :version   version, :parent  parent,
           :is_merge 0,
-          :userid   nil,              :sessionid nil,        :comment nil})
+          :userid   nil,              :sessionid nil,     :comment nil})
         (update-indexes! conn :update m before changes))
       data)))
 
@@ -718,11 +787,16 @@
   [m]
   (assert (and (:id m) (:version m)) ":id & :version is minimum for delete.")
   (sql/with-db-transaction [conn *db*]
-    (let [affected   (cmd/delete-latest! conn m)
-          entity-str (str-edn (:entity m))]
+    (let [entity-str (str-edn (:entity m))
+          tenant     (nn (:tenant m))
+          _          (verify-tenant-write tenant)
+          tenant-str (tenant->str tenant)
+          affected   (cmd/delete-latest! conn {:id (:id m) :tenant tenant-str})
+          _          (assert (= affected 1) "No row deleted by delete")]
       (cmd/create-history!
        conn
-       {:id       (:id m),     :entity    entity-str,         :deleted 1,
+       {:id       (:id m),     :tenant    tenant-str
+        :entity   entity-str,  :deleted   1,
         :before   (str-edn m), :after     empty-map-edn,
         :updated  (now),       :version   (inc (:version m)), :parent  (:version m),
         :is_merge 0,
@@ -742,14 +816,18 @@
    We do not care if anyone has updated or deleted the row just before."
   [id]
   (sql/with-db-transaction [conn *db*]
-    (let [affected (cmd/delete-latest! conn {:id id})]
+    (let [tenant     (get-tenant)
+          tenant-str (tenant->str tenant)
+          affected   (cmd/delete-latest! conn {:id id :tenant tenant-str})
+          _          (assert (= affected 1) "No row deleted by delete")]
       (cmd/create-history!
        conn
-       {:id       id,            :entity    (str-edn :unknown), :deleted 1,
-        :before   empty-map-edn, :after     empty-map-edn,
-        :updated  (now),         :version   2000000001,         :parent  2000000000,
+       {:id       id,                 :tenant    tenant-str
+        :entity   (str-edn :unknown), :deleted   1,
+        :before   empty-map-edn,      :after     empty-map-edn,
+        :updated  (now),              :version   2000000001, :parent  2000000000,
         :is_merge 0,
-        :userid   nil,           :sessionid nil,                :comment nil})
+        :userid   nil,                :sessionid nil,        :comment nil})
       (delete-indexes-without-data! conn id)
       nil)))
 
@@ -765,15 +843,20 @@
   [id]
   (if-let [m (try-get id)]
     (sql/with-db-transaction [conn *db*]
-      (let [affected (cmd/delete-latest! conn {:id (:id m)})
-            version  (:version m)]
+      (let [version    (:version m)
+            tenant     (nn (:tenant m))
+            _          (verify-tenant-write tenant)
+            tenant-str (tenant->str tenant)
+            affected   (cmd/delete-latest! conn {:id (:id m) :tenant tenant-str})
+            _          (assert (= affected 1) "No row deleted by delete")]
         (cmd/create-history!
          conn
-         {:id       (:id m),     :entity    (str-edn (:entity m)), :deleted 1,
-          :before   (str-edn m), :after     empty-map-edn,
-          :updated  (now),       :version   (inc version),         :parent  version,
+         {:id       (:id m),               :tenant    tenant-str
+          :entity   (str-edn (:entity m)), :deleted   1,
+          :before   (str-edn m),           :after     empty-map-edn,
+          :updated  (now),                 :version   (inc version), :parent  version,
           :is_merge 0,
-          :userid   nil,         :sessionid nil,                   :comment nil})
+          :userid   nil,                   :sessionid nil,           :comment nil})
         (delete-indexes-without-data! conn id)
         nil))))
 
@@ -787,7 +870,8 @@
   [m]
   (into m {:after (clojure.edn/read-string (:after m))
            :before (clojure.edn/read-string (:before m))
-           :entity (clojure.edn/read-string (:entity m))}))
+           :entity (clojure.edn/read-string (:entity m))
+           :tenant (str->tenant (:tenant m))}))
 
 
 (s/fdef history
@@ -797,7 +881,9 @@
 (defn history
   "Get the complete history for `id`."
   [id]
-  (map deserialize-history (cmd/select-history {:id id})))
+  (map deserialize-history
+       (cmd/select-history {:id id
+                            :tenant (tenant->str (get-tenant))})))
 
 
 (s/fdef history-by-entity
@@ -807,7 +893,9 @@
 (defn history-by-entity
   "Get the complete history for all entities of `entity`."
   [entity]
-  (map deserialize-history (cmd/select-history-by-entity {:entity (str-edn entity)})))
+  (map deserialize-history (cmd/select-history-by-entity
+                            {:tenant (tenant->str (get-tenant))
+                             :entity (str-edn entity)})))
 
 
 (s/fdef history-nil-entity
@@ -833,7 +921,9 @@
   "Get the complete history for `id`, but do not read :before and :after.
    Used to present who changed anything for this object."
   [id]
-  (map deserialize-history (cmd/select-history-short {:id id})))
+  (map deserialize-history
+       (cmd/select-history-short {:id id
+                                  :tenant (tenant->str (get-tenant))})))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -875,7 +965,7 @@
   [ids]
   (doseq [id ids]
     (when-not (verify-stored-data id)
-      (println (str id " not ok")))))
+      (println (str "'" id "' not ok")))))
 
 
 (defn verify-all-stored-data

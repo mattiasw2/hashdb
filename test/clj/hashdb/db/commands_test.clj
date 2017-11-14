@@ -93,7 +93,7 @@
 (defn create-update-operation
   "Change or delete or add a new key to `m`.
    In 30% of the operations, then value will be nil, i.e. delete."
-  ([m] (let [res (create-update-operation (filter #(not (#{:id :entity :k :updated :version} (key %))) m) {})]
+  ([m] (let [res (create-update-operation (filter #(not (#{:id :tenant :entity :k :updated :version} (key %))) m) {})]
          ;; (println (count res))
          res))
   ([m changes]
@@ -103,7 +103,7 @@
              rest (nthrest m nxt)
              k (key next)
              v (if (and (not (#{:s1 :s2 :s3 :s4 :s5} k))(< (rand-int 10) 3)) nil (random-string))]
-             ;; v (random-string)]
+         ;; v (random-string)]
          (recur rest (assoc changes k v))))))
 
 
@@ -190,9 +190,10 @@
 (def ^:dynamic src nil)
 (defn test-many-n
   [n]
-  (let [d (mapv first (s/exercise :hashdb.db.commands/data n))]
-    (def src d)
-    (test-many d)))
+  (with-tenant :single
+    (let [d (mapv first (s/exercise :hashdb.db.commands/data n))]
+      (def src d)
+      (test-many d))))
 
 ;; I cannot run this in multiple-thread, and inside check there is a pmap.
 ;; So I am testing check-fn instead.
@@ -212,15 +213,16 @@
       :or {n 1000
            par 2
            delay 2000}}]
-  (let [samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
-    (clear-database)
-    (->>
-     (range par)
-     (mapv (fn [_]
-             (Thread/sleep delay)
-             (future (test-many-continue samples (= par 1)))))
-     (mapv deref))
-    (println "Finished")))
+  (with-tenant :single
+    (let [samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
+      (clear-database)
+      (->>
+       (range par)
+       (mapv (fn [_]
+               (Thread/sleep delay)
+               (future (test-many-continue samples (= par 1)))))
+       (mapv deref))
+      (println "Finished"))))
 
 
 
@@ -262,103 +264,110 @@
 
 (deftest test-all-commands-without-indexes
   []
-  (let [m1  (hashdb.db.commands/create! {:då "foo"})
-        id1 (:id m1)
-        m2  (hashdb.db.commands/create! {:bar "rolf" :uppsala 10})
-        id2 (:id m2)
-        m3  (hashdb.db.commands/create! {:gunnar "mattias"})
-        id3 (:id m3)]
-    (hashdb.db.commands/update! (hashdb.db.commands/get id1) {:bar "foo"})
-    (let [m2-1 (hashdb.db.commands/get id2)
-          res2 (hashdb.db.commands/update-diff! m2-1 (into m2-1 {:uppsala 20 :sundsvall 30}))]
-      (is (= 30 (:sundsvall res2))))
-    (is (nil? (hashdb.db.commands/delete-by-id! id2)))
-    (is (nil? (hashdb.db.commands/delete! (hashdb.db.commands/get id1))))
+  (with-tenant :single
+    (let [m1  (hashdb.db.commands/create! {:då "foo"})
+          id1 (:id m1)
+          m2  (hashdb.db.commands/create! {:bar "rolf" :uppsala 10})
+          id2 (:id m2)
+          m3  (hashdb.db.commands/create! {:gunnar "mattias"})
+          id3 (:id m3)]
+      (hashdb.db.commands/update! (hashdb.db.commands/get id1) {:bar "foo"})
+      (let [m2-1 (hashdb.db.commands/get id2)
+            res2 (hashdb.db.commands/update-diff! m2-1 (into m2-1 {:uppsala 20 :sundsvall 30}))]
+        (is (= 30 (:sundsvall res2))))
+      (is (nil? (hashdb.db.commands/delete-by-id! id2)))
+      (is (nil? (hashdb.db.commands/delete! (hashdb.db.commands/get id1))))
 
-    ;, for data element
-    (is (= "lena" (:gunnar (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:bar "foo", :gunnar "lena"}))))
-    (is (nil? (:bar (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:bar nil}))))
-    (is (nil? (:bar (hashdb.db.commands/get id3))))
-    ;; verify that nil values are removed from map
-    ;; (is (not (contains? (hashdb.db.commands/get id3) :bar)))
+                                        ;, for data element
+      (is (= "lena" (:gunnar (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:bar "foo", :gunnar "lena"}))))
+      (is (nil? (:bar (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:bar nil}))))
+      (is (nil? (:bar (hashdb.db.commands/get id3))))
+      ;; verify that nil values are removed from map
+      ;; (is (not (contains? (hashdb.db.commands/get id3) :bar)))
 
-    ;; for INDEXED data element
-    (is (= "runar" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s1 "runar"}))))
-    (is (nil? (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s1 nil}))))
-    (is (nil? (:s1 (hashdb.db.commands/get id3))))
-    ;; verify that nil values are removed from map
-    ;; (is (not (contains? (hashdb.db.commands/get id3) :s1)))
+      ;; for INDEXED data element
+      (is (= "runar" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s1 "runar"}))))
+      (is (nil? (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s1 nil}))))
+      (is (nil? (:s1 (hashdb.db.commands/get id3))))
+      ;; verify that nil values are removed from map
+      ;; (is (not (contains? (hashdb.db.commands/get id3) :s1)))
 
-    (is (nil? (hashdb.db.commands/delete-by-id-with-minimum-history! id3)))
-    (is (= 3 (count (hashdb.db.commands/history id1))))
-    (is (= 3 (count (hashdb.db.commands/history id2))))
-    (is (= 3 (count (hashdb.db.commands/history-short id2))))
-    (println "m3")
-    (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity)))))))
+      (is (nil? (hashdb.db.commands/delete-by-id-with-minimum-history! id3)))
+      (is (= 3 (count (hashdb.db.commands/history id1))))
+      (is (= 3 (count (hashdb.db.commands/history id2))))
+      (is (= 3 (count (hashdb.db.commands/history-short id2))))
+      (println "m3")
+      (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity))))))))
+
+
+
 
 (deftest test-all-commands-with-indexes
   []
-  (let [m1  (hashdb.db.commands/create! {:s2 "foo"})
-        id1 (:id m1)
-        m2  (hashdb.db.commands/create! {:s3 "rolf" :uppsala 10})
-        id2 (:id m2)
-        m3  (hashdb.db.commands/create! {:s1 "mattias"})
-        id3 (:id m3)]
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (hashdb.db.commands/update! (hashdb.db.commands/get id1) {:s3 "foo"})
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (let [m2-1 (hashdb.db.commands/get id2)
-          res2 (hashdb.db.commands/update-diff! m2-1 (into m2-1 {:uppsala 20 :sundsvall 30}))]
-      (is (= 30 (:sundsvall res2))))
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (is (nil? (hashdb.db.commands/delete-by-id! id2)))
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (is (nil? (hashdb.db.commands/delete! (hashdb.db.commands/get id1))))
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (is (nil? (hashdb.db.commands/delete-by-id-with-minimum-history! id3)))
-    (is (verify-stored-data id1))
-    (is (verify-stored-data id2))
-    (is (verify-stored-data id3))
-    (is (= 3 (count (hashdb.db.commands/history id1))))
-    (is (= 3 (count (hashdb.db.commands/history id2))))
-    (is (= 3 (count (hashdb.db.commands/history-short id2))))
-    (println "m3")
-    (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity)))))))
+  (with-tenant :single
+    (let [m1  (hashdb.db.commands/create! {:s2 "foo"})
+          id1 (:id m1)
+          m2  (hashdb.db.commands/create! {:s3 "rolf" :uppsala 10})
+          id2 (:id m2)
+          m3  (hashdb.db.commands/create! {:s1 "mattias"})
+          id3 (:id m3)]
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (hashdb.db.commands/update! (hashdb.db.commands/get id1) {:s3 "foo"})
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (let [m2-1 (hashdb.db.commands/get id2)
+            res2 (hashdb.db.commands/update-diff! m2-1 (into m2-1 {:uppsala 20 :sundsvall 30}))]
+        (is (= 30 (:sundsvall res2))))
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (is (nil? (hashdb.db.commands/delete-by-id! id2)))
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (is (nil? (hashdb.db.commands/delete! (hashdb.db.commands/get id1))))
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (is (nil? (hashdb.db.commands/delete-by-id-with-minimum-history! id3)))
+      (is (verify-stored-data id1))
+      (is (verify-stored-data id2))
+      (is (verify-stored-data id3))
+      (is (= 3 (count (hashdb.db.commands/history id1))))
+      (is (= 3 (count (hashdb.db.commands/history id2))))
+      (is (= 3 (count (hashdb.db.commands/history-short id2))))
+      (println "m3")
+      (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity))))))))
 
 (deftest test-all-commands-with-indexes-small
-  (let [m3  (hashdb.db.commands/create! {:s1 "mattias"})
-        id3 (:id m3)]
-    (is (verify-stored-data "unknown-id"))
-    (is (verify-stored-data id3))
-    (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
-    (is (verify-stored-data id3))
-    (is (= 2 (count (cmd/select-string-index {:id id3}))))
-    (let [found   (select-by-string :unknown :s3 "foo")
-          ntfound (select-by-string :unknown :s3 "foox")]
-      (is (= "lena" (:s1 (first found))))
-      (is (empty? ntfound)))))
+  (with-tenant :single
+    (let [m3  (hashdb.db.commands/create! {:s1 "mattias"})
+          id3 (:id m3)]
+      (is (verify-stored-data "unknown-id"))
+      (is (verify-stored-data id3))
+      (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
+      (is (verify-stored-data id3))
+      (is (= 2 (count (cmd/select-string-index {:id id3}))))
+      (let [found   (select-by-string :unknown :s3 "foo")
+            ntfound (select-by-string :unknown :s3 "foox")]
+        (is (= "lena" (:s1 (first found))))
+        (is (empty? ntfound))))))
 
 (deftest test-verify-row-in-sync
-  (is (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f"} {:updated (now) :entity :f}))
-  (let [start (now)]
-    (Thread/sleep 1100)
-    (is (thrown?
-         Throwable
-         (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f"} {:updated start :entity :f})))))
+  (with-tenant :single
+    (is (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f" :tenant "1"} {:updated (now) :entity :f :tenant :single}))
+    (let [start (now)]
+      (Thread/sleep 1100)
+      (is (thrown?
+           Throwable
+           (verify-row-in-sync {:updated (org.joda.time.DateTime. (now)) :entity ":f"} {:updated start :entity :f}))))))
 
 
 

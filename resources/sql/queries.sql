@@ -8,7 +8,7 @@ VALUES (:id, :tenant, :entity, :data, :updated, :version, :parent)
 -- :doc update an existing latest record
 UPDATE latest
 SET data = :data, updated = :updated, parent = :parent, version = :version
-WHERE id = :id and version = :parent and tenant = :tenant
+WHERE id = :id AND version = :parent AND tenant = :tenant
 -- WHERE id = :id
 -- tz problem WHERE id = :id and updated = :parent
 
@@ -59,7 +59,7 @@ AND    si.index_data = :index_data
 -- :name delete-latest! :! :n
 -- :doc delete a latest given the id
 DELETE FROM latest
-WHERE id = :id
+WHERE id = :id AND tenant = :tenant
 
 
 -- :name create-history! :! :n
@@ -73,6 +73,7 @@ VALUES (:id, :tenant, :entity, :deleted, :before, :after, :updated, :version, :p
 -- :doc retrieve all history rows for a latest entry
 SELECT * FROM history
 WHERE ID = :id
+AND   tenant = :tenant
 
 
 -- :name select-history-by-entity :? :*
@@ -93,6 +94,7 @@ AND   tenant = :tenant
 -- :doc retrieve all history rows for a latest entry
 SELECT id, entity, `deleted`, updated, version, parent, is_merge, userid, sessionid, comment FROM history
 WHERE ID = :id
+AND   tenant = :tenant
 
 -- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
