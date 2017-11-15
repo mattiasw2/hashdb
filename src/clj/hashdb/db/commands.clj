@@ -41,6 +41,21 @@
 ;; where nil should never be read, if it is, something is wrong.
 (def ^:dynamic *tenant* nil)
 
+
+;; needs to be function, since *tenant* cannot be changed from other ns
+(defn single-tenant-mode
+  "There is only one tenant."
+  []
+  (def *tenant* :single))
+
+
+(defn reset-single-tenant-mode
+  "Step out of single tenant mode.
+   Only needed for debugging and unit tests."
+  []
+  (def *tenant* nil))
+
+
 (defmacro with-tenant
   "Bind *tenant* to `tenant` and execute `forms`."
   [tenant & forms]
@@ -52,8 +67,10 @@
         :args (s/cat :tenant ::tenant)
         :ret  string?)
 
+
 ;; the tenant name for :single
 (def SINGLE-TENANT "!")
+
 
 ;; Wouldn't it be better to use spec for checking below? Now, the
 ;; code is duplicated. It is as if some spec:s should always be
@@ -118,6 +135,11 @@
     (throw (Exception. (str "Read without explicit tenant not allowed when *tenant* is '" *tenant* "'")))
     *tenant*))
 
+
+(defn get-tenant-raw
+  "If you just want to access *tenant*"
+  []
+  *tenant*)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -704,6 +726,7 @@
   "Return all rows of type `entity` where `k` is exactly
    the string `search` regardless of tenant."
   [entity k search]
+  (assert (= :global (get-tenant-raw)) (str "For global search, you need to set tenant to :global, not '" (get-tenant-raw) "'"))
   (let [res (cmd/select-by-string-index-global {:entity (str-edn entity) :k (str-edn k)
                                                 :index_data (str-index search)})]
     (map extract-row res)))
