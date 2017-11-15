@@ -272,9 +272,9 @@
   (let [m (with-tenant "one"
             (hashdb.db.commands/create! {:bergström "mats"}))
         mA (with-tenant "eleven"
-            (hashdb.db.commands/create! {:bergström "mats"}))
+             (hashdb.db.commands/create! {:bergström "mats"}))
         mB (with-tenant "twelfe"
-            (hashdb.db.commands/create! {:bergström "mats"}))
+             (hashdb.db.commands/create! {:bergström "mats"}))
         m2 (with-tenant "one"
              (hashdb.db.commands/get (:id m)))
         _  (is (= (:id m) (:id m2)))
@@ -296,12 +296,12 @@
         m9 (with-tenant "two"
              (is (thrown? Throwable (hashdb.db.commands/delete-by-id! (:id mA)))))
         m10 (with-tenant "eleven"
-             (hashdb.db.commands/delete-by-id! (:id mA)))
+              (hashdb.db.commands/delete-by-id! (:id mA)))
         _ (is (nil? m10))
         m11 (with-tenant "two"
-             (is (thrown? Throwable (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))))
+              (is (thrown? Throwable (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))))
         m12 (with-tenant "twelfe"
-             (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))
+              (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))
         _ (is (nil? m12))]))
 
 (deftest test-cannot-select-from-other-tennant
@@ -309,17 +309,17 @@
   (let [m (with-tenant "two"
             (hashdb.db.commands/create! {:s1 "mats" :name "bergström"}))
         m2 (with-tenant "two"
-            (hashdb.db.commands/create! {:s1 "mats" :name "johansson"}))
+             (hashdb.db.commands/create! {:s1 "mats" :name "johansson"}))
         m3 (with-tenant "three"
-            (hashdb.db.commands/create! {:s1 "mats" :name "larsson"}))
+             (hashdb.db.commands/create! {:s1 "mats" :name "larsson"}))
         ms (with-tenant "two"
              (hashdb.db.commands/select-by-string :unknown :s1 "mats"))
         _  (is (= 2 (count ms)))
         ms2 (with-tenant "three"
-             (hashdb.db.commands/select-by-string :unknown :s1 "mats"))
+              (hashdb.db.commands/select-by-string :unknown :s1 "mats"))
         _  (is (= 1 (count ms2)))
         ms3 (with-tenant :global
-             (hashdb.db.commands/select-by-string-global :unknown :s1 "mats"))
+              (hashdb.db.commands/select-by-string-global :unknown :s1 "mats"))
         _  (is (= 3 (count ms3)))
         ms4 (with-tenant "four"
               (is (thrown? Throwable    ;Exception not enough, since assert
