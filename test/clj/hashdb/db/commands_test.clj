@@ -334,7 +334,7 @@
 
 
 (deftest test-all-commands-without-indexes
-  []
+  (clear-database)
   (with-tenant :single
     (let [m1  (hashdb.db.commands/create! {:då "foo"})
           id1 (:id m1)

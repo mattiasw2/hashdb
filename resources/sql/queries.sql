@@ -92,7 +92,7 @@ AND   tenant = :tenant
 
 -- :name select-history-short :? :*
 -- :doc retrieve all history rows for a latest entry
-SELECT id, entity, `deleted`, updated, version, parent, is_merge, userid, sessionid, comment FROM history
+SELECT id, tenant, entity, `deleted`, updated, version, parent, is_merge, userid, sessionid, comment FROM history
 WHERE ID = :id
 AND   tenant = :tenant
 
