@@ -46,14 +46,14 @@
 (defn single-tenant-mode
   "There is only one tenant."
   []
-  (def *tenant* :single))
+  (def ^:dynamic *tenant* :single))
 
 
 (defn reset-single-tenant-mode
   "Step out of single tenant mode.
    Only needed for debugging and unit tests."
   []
-  (def *tenant* nil))
+  (def ^:dynamic *tenant* nil))
 
 
 (defmacro with-tenant
@@ -93,7 +93,7 @@
   "Return the `str` as a proper tenant value."
   [str]
   (cond (= str SINGLE-TENANT) :single
-        true        str))
+        true                  str))
 
 
 (s/fdef verify-tenant-read
@@ -145,7 +145,7 @@
 ;;;
 ;;; mySQL tips:
 ;;;
-;;; 1. subqueries are slow, but there is a trick:
+;;; 1. Subqueries are slow, but there is a trick:
 ;;;    https://stackoverflow.com/questions/6135376/mysql-select-where-field-in-subquery-extremely-slow-why
 ;;; 2. What is done in mySQL v6? Also shows different ways of doing it.
 ;;;    https://www.scribd.com/document/2546837/New-Subquery-Optimizations-In-MySQL-6
@@ -353,10 +353,14 @@
 ;; The complete stored data.
 ;;
 ;; TODO: where is ::data?
-(s/def ::stored-latest
+(s/def ::create-latest
   (s/keys :req-un [::id ::entity ::updated ::version]
           ;; ::tenant optional since optional for create!
           :opt-un [::tenant]))
+
+(s/def ::stored-latest
+  (s/keys :req-un [::id ::tenant ::entity ::updated ::version]
+          :opt-un []))
 
 ;; The history record.
 (s/def ::stored-history
@@ -564,7 +568,7 @@
 
 (s/fdef create!
         :args (s/cat :m ::data)
-        :ret ::stored-latest)
+        :ret ::create-latest)
 
 (defn create!
   "Insert map `m` into db.
