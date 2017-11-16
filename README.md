@@ -57,7 +57,11 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
  * Define your own indexes, currently keys :s1 :s2 :s3 :s4 are indexed
  * Add LIKE lookups for strings
  * Add integer indexes
+
+### Open questions
+
  * Decide if we should only handle the first index by the database, and the rest by filtering inside Clojure.
+ * Should we store as JSON instead of EDN, to make other clients easily read the data?
 
 ## Project template
 
