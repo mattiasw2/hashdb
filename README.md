@@ -52,10 +52,12 @@ See
 
 https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test.clj
 
-## Missing functionality
+## Ongoing development
 
- * Define your indexes, currently keys :s1 :s2 :s3 :s4 are indexed
+ * Define your own indexes, currently keys :s1 :s2 :s3 :s4 are indexed
+ * Add LIKE lookups for strings
  * Add integer indexes
+ * Decide if we should only handle the first index by the database, and the rest by filtering inside Clojure.
 
 ## Project template
 
