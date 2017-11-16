@@ -19,7 +19,7 @@
                  [mount "0.1.11"]
                  ;; cannot be upgraded to 8.0.8, since it doesn't exist
                  [mysql/mysql-connector-java "6.0.5"]
-                 [org.clojure/clojure "1.9.0-beta2"]
+                 [org.clojure/clojure "1.9.0-beta4"]
                  [org.clojure/clojurescript "1.9.946"] ;; :scope "provided"
                  [org.clojure/java.jdbc "0.7.3"]
                  [org.clojure/tools.cli "0.3.5"]
@@ -30,6 +30,15 @@
                  [ring-webjars "0.2.0"]
                  [ring/ring-core "1.6.2"]
                  [ring/ring-defaults "0.3.1"]
+
+                 ;;
+                 ;; in profiles [com.billpiel/sayid "0.0.15"]
+
+
+                 ;; instrumentation instead of https://github.com/HdrHistogram/HdrHistogram
+                 ;; http://metrics-clojure.readthedocs.io/en/latest/
+                 ;; What are the different things: http://metrics.dropwizard.io/3.2.3/getting-started.html
+                 [metrics-clojure "2.10.0"]
 
                  ;; I like timeuuid, since then clustered index works
                  [cc.qbits/tardis "1.1.0"]
