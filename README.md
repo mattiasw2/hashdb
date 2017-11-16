@@ -1,5 +1,7 @@
 # hashdb
 
+A database for clojure maps with support for database indexes and multiple tenants. Complete history of changes also maintained.
+
 Originally, the database was planned to work like Cassandra, i.e. the latest value per column wins. Also works for maps.
 
 However, it got too complicated, and I do not need to for my scenarios.
@@ -10,7 +12,7 @@ Originally, I did optimistic locking using timestamp and then I want everything 
 
     my.ini
 
-    [mysqld]
+    [mysqld]§
     basedir=C:\\tools\\mysql\\current
     datadir=C:\\ProgramData\\MySQL\\data
     default-time-zone='+00:00'
