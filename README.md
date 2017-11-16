@@ -42,9 +42,20 @@ To start a web server for the application, run:
 
     lein run
 
-or om repl
+or if repl
 
     (user/start)
+
+## Samples
+
+See
+
+https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test.clj
+
+## Missing functionality
+
+ * Define your indexes, currently keys :s1 :s2 :s3 :s4 are indexed
+ * Add integer indexes
 
 ## Project template
 
