@@ -181,13 +181,15 @@
         :args (s/cat)
         :ret  ::uuid-str)
 
-(defn uuid []
+(defn uuid
   "Return a uuid as string."
+  []
   (str (java.util.UUID/randomUUID)))
 
 
-(defn now []
+(defn now
   "Return now in UTC."
+  []
   (new java.util.Date))
 
 
