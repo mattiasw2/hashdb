@@ -1,0 +1,2 @@
+ALTER TABLE `int_index`
+DROP PRIMARY KEY;

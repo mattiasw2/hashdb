@@ -12,7 +12,7 @@ Originally, I did optimistic locking using timestamp and then I want everything 
 
     my.ini
 
-    [mysqld]§
+    [mysqld]
     basedir=C:\\tools\\mysql\\current
     datadir=C:\\ProgramData\\MySQL\\data
     default-time-zone='+00:00'

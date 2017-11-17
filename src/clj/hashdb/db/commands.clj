@@ -338,17 +338,20 @@
     (s/map-of keyword? any?))
   (do
     ;; during testing, there are the keys that are indexed
-    (def possible-keys #{:s1 :s2 :s3 :s4})
-    (s/def ::s1 string?)
-    (s/def ::s2 string?)
-    (s/def ::s3 string?)
-    (s/def ::s4 string?)
-    ;; (s/def ::i1 int?)
-    ;; (s/def ::i2 int?)
+    ;; todo: decide if I should keep nil values in m, when storing in latest.
+    (def possible-keys #{:s1 :s2 :s3 :s4 :i1 :i2 :i3 :i4})
+    (s/def ::s1 (s/nilable string?))
+    (s/def ::s2 (s/nilable string?))
+    (s/def ::s3 (s/nilable string?))
+    (s/def ::s4 (s/nilable string?))
+    ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
+    (s/def ::i1 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+    (s/def ::i2 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+    (s/def ::i3 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+    (s/def ::i4 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
     (s/def ::indexed-data
       (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
-                       ;; ::i1 ::i2
-                       ::s4]))
+                       ::i1 ::i2 ::i3 ::i4]))
     (s/def ::data
       ;; ::indexed-data should be first, it created samples without any :s1 :s2 :s3 :s4
       (s/merge ::indexed-data (s/map-of ::short-keyword any?)))))
@@ -356,7 +359,7 @@
 ;; `::changes` are the set of key-value pairs that are used to update the stored data
 ;; for changes, it is okay to set nil, which means remove key
 (s/def ::changes
-  (s/map-of keyword? (s/nilable some?)))
+  (s/map-of keyword? (s/nilable any?)))
 
 ;; The complete stored data.
 ;;
@@ -405,8 +408,28 @@
   ;; TODO: depends on (get-tenant)
   [m]
   (let [raw {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
-             :i1 :long, :i2 :long}]
+             :i1 :long,   :i2 :long,   :i3 :long,   :i4 :long}]
     [raw (into #{} (map key raw))]))
+
+
+(s/fdef select-index
+        :args (s/cat :typ ::idx-type :s any? :k any?)
+        :ret  any?)
+
+;; optimization: could be turned into a macro, so that not both args are evaluated.
+(defn select-index
+  "Depending on the typ, return the string `s` or long version `k`."
+  [typ s k]
+  (cond (= typ :string) s
+        (= typ :long)   k
+        true            (assert ("Unknown type '" + typ "'"))))
+
+(defn select-index-by-value
+  "Depending on the type of `v`, return the string `s` or long version `k`."
+  [v s k]
+  (cond (string? v) s
+        (int? v)    k
+        true        (assert ("Unknown type '" + (type v) "'"))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -443,14 +466,13 @@
   "Create index entries for new record `id`."
   [conn before typ changes id entity]
   (assert (empty? before))
-  (if (= :string typ)
-    ;; (sort to avoid deadlock, by always adding stuff in the same order
-    (doseq [[k v] (sort changes)]
-      ;; no point in adding nil:s to index
-      (if v (cmd/create-string-index!
-             conn
-             {:id id, :entity (str-edn entity), :k (str-edn k),
-              :index_data (str-index v)})))))
+  ;; (sort to avoid deadlock, by always adding stuff in the same order
+  (doseq [[k v] (sort changes)]
+    ;; no point in adding nil:s to index
+    (if v ((select-index typ cmd/create-string-index! cmd/create-long-index!)
+           conn
+           {:id id, :entity (str-edn entity), :k (str-edn k),
+            :index_data (select-index typ (str-index v) v)}))))
 
 (defn- update-indexes-one-type-update!
   "Update index entries for already existing record `id`."
@@ -468,35 +490,41 @@
                            (set key-changes) keys-before)
         should-be-created (clojure.set/difference
                            (set (keys map-changes)) keys-before)]
-    (when (= :string typ)
-      ;; Sort to minimize risk of deadlock
-      ;; MySQLTransactionRollbackException Deadlock found when trying to get lock;
-      ;; try restarting transaction:
-      ;; com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
-      ;;
-      ;; Todo: If it still happends, I have to sort delete+create+update according to :k
-      (doseq [[k v] (sort map-deleted)]
-        ;; v = nil means deleted
-        (assert (nil? v))
-        (let [res (cmd/delete-single-string-index!
-                   conn {:id id, :entity (str-edn entity), :k (str-edn k)})]
-          (assert (= 1 res))))
+    ;; Sort to minimize risk of deadlock
+    ;; MySQLTransactionRollbackException Deadlock found when trying to get lock;
+    ;; try restarting transaction:
+    ;; com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+    ;;
+    ;; Todo: If it still happends, I have to sort delete+create+update according to :k
+    (doseq [[k v] (sort map-deleted)]
+      ;; v = nil means deleted
+      (assert (nil? v))
+      (let [res ((select-index typ cmd/delete-single-string-index! cmd/delete-single-long-index!)
+                 conn {:id id, :entity (str-edn entity), :k (str-edn k)})]))
 
-      (doseq [k (sort should-be-created)]
-        ;; no point in adding nil:s to index, so should never happen,
-        ;; even if has nil value
-        (assert (k changes))
-        (let [res (cmd/create-string-index!
-                   conn {:id id, :entity (str-edn entity), :k (str-edn k)
-                         :index_data (str-index (k changes))})]
-          (assert (= 1 res))))
-      (doseq [k (sort should-be-updated)]
+    ;; when allowed storing nil by adding s/nilable to :s1 :i1 ... I hade to comment this
+    ;; (assert (= 1 res))))
+
+    (doseq [k (sort should-be-created)]
+      ;; no point in adding nil:s to index, so should never happen,
+      ;; even if has nil value
+      (assert (k changes))
+      (let [res ((select-index typ cmd/create-string-index! cmd/create-long-index!)
+                 conn {:id id, :entity (str-edn entity), :k (str-edn k)
+                       :index_data (select-index typ (str-index (k changes)) (k changes))})]
+        (assert (= 1 res))))
+    (doseq [k (sort should-be-updated)]
+      ;; the let cannot be moved into the doseq, that is something different
+      (let [v (k changes)]
         ;; update to nil, same as deleting (but this case should not happen
         ;; since then changes will not fulfil ::data)
-        (assert (k changes))
-        (cmd/update-string-index!
+        (assert v)
+        ;; verify that string indexes are strings, and int indexes are ints.
+        (assert (select-index typ (string? v) (int? v))
+                (str "Not expected type '" typ "' '" v "'"))
+        ((select-index typ cmd/update-string-index! cmd/update-long-index!)
          conn {:id id, :entity (str-edn entity), :k (str-edn k)
-               :index_data (str-index (k changes))})))
+               :index_data (select-index typ (str-index v) v)})))
     nil))
 
 
@@ -508,8 +536,7 @@
   "Delete al index entries for record `id`."
   [conn changes typ id]
   (assert (empty? changes))
-  (if (= :string typ)
-    (cmd/delete-string-index! conn {:id id}))
+  ((select-index typ cmd/delete-string-index! cmd/delete-long-index!) conn {:id id})
   nil)
 
 
@@ -721,34 +748,39 @@
 
 ;; (cmd/select-by-string-index {:entity ":unknown" :k ":s1" :index_data "lena"})
 
-(s/fdef select-by-string
-        :args (s/cat :entity ::entity :k ::k :search string?)
+;; TODO select-by-long
+;; TODO select-by-long-global
+;;
+;; or should I only have select-by ???
+
+(s/fdef select-by
+        :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
         :ret  (s/* ::stored-latest))
 
-(defn select-by-string
+(defn select-by
   "Return all rows of type `entity` where `k` is exactly the string `search`."
   [entity k search]
-  (let [res (cmd/select-by-string-index
+  (let [res ((select-index-by-value search cmd/select-by-string-index cmd/select-by-long-index)
              {:tenant (tenant->str (get-tenant))
               :entity (str-edn entity) :k (str-edn k)
-              :index_data (str-index search)})]
+              :index_data (select-index-by-value search (str-index search) search)})]
     (map extract-row res)))
 
 
-(s/fdef select-by-string-global
-        :args (s/cat :entity ::entity :k ::k :search string?)
+(s/fdef select-by-global
+        :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
         :ret  (s/* ::stored-latest))
 
-(defn select-by-string-global
+(defn select-by-global
   "Return all rows of type `entity` where `k` is exactly
    the string `search` regardless of tenant."
   [entity k search]
   (assert (= :global (get-tenant-raw))
           (str "For global search, you need to set tenant to :global, not '"
                (get-tenant-raw) "'"))
-  (let [res (cmd/select-by-string-index-global
+  (let [res ((select-index-by-value search cmd/select-by-string-index-global cmd/select-by-long-index-global)
              {:entity (str-edn entity) :k (str-edn k)
-              :index_data (str-index search)})]
+              :index_data (select-index-by-value search (str-index search) search)})]
     (map extract-row res)))
 
 
@@ -990,14 +1022,16 @@
    If not, print out warning and return false."
   [id]
   (let [m           (try-get id)
-        idxs        (cmd/select-string-index {:id id})
+        ;; TODO: select-long-index
+        idxs        (concat (cmd/select-string-index {:id id}) (cmd/select-long-index {:id id}))
         idxs-as-map (into {}
                           (map (fn [idx] [(clojure.edn/read-string (:k idx))
                                           (:index_data idx)])
                                idxs))]
     (if m
       (let [idx-info    (indexes m)
-            idx-values  (select-keys m (second idx-info))
+            ;; filter nil values, since these do not have an index entry
+            idx-values  (into {} (filter (fn [[k v]] (some? v))(select-keys m (second idx-info))))
             diff        (keep-difference-by-type m idx-info)]
         (and (or (zero? (count idxs))
                  (= (:entity m)
@@ -1013,7 +1047,8 @@
   [ids]
   (doseq [id ids]
     (when-not (verify-stored-data id)
-      (println (str "'" id "' not ok")))))
+      (println (str "'" id "' not ok"))
+      (assert false))))
 
 
 (defn verify-all-stored-data

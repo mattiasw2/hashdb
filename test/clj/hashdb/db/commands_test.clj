@@ -78,6 +78,14 @@
   (str (uuid)))
 
 
+(defn- update-or-delete-value
+  [k]
+  (cond (< (rand-int 10) 3)        nil
+        (#{:i1 :i2 :i3 :i4 :i5} k) (rand-int 2147483647)
+        ;; true for all other data incl :s1 :s2 :s3 :s4 :s5
+        true                       (random-string)))
+
+
 ;; (create-update-operation {:a 1 :b 2 :c 3 :d 4})
 ;; => {:a "5280dda4-40ac-41f4-99a5-7a7131ee6582", :b "7076d6a7-2d78-4f2b-b38a-139662904a9c"}
 ;; (create-update-operation {:a 1 :b 2 :c 3 :d 4})
@@ -89,22 +97,31 @@
                     :rec  (s/cat :m any? :changes :hashdb.db.commands/changes))
         :ret  :hashdb.db.commands/changes)
 
-;; todo: add new k-v pairs, incl :s1 :s2 :s3 :s4
+
+
 (defn create-update-operation
   "Change or delete or add a new key to `m`.
    In 30% of the operations, then value will be nil, i.e. delete."
+  ;; Do not change or delete any of the pre-defined keys
   ([m] (let [res (create-update-operation (filter #(not (#{:id :tenant :entity :k :updated :version} (key %))) m) {})]
          ;; (println (count res))
          res))
   ([m changes]
    (if (<= (count m) 3) changes
-       (let [nxt (rand-int (count m))
-             next (nth m nxt)
-             rest (nthrest m nxt)
-             k (key next)
-             v (if (and (not (#{:s1 :s2 :s3 :s4 :s5} k))(< (rand-int 10) 3)) nil (random-string))]
-         ;; v (random-string)]
-         (recur rest (assoc changes k v))))))
+       ;; find the next key to change (update or delete)
+       (let [nxt      (rand-int (count m))
+             next     (nth m nxt)
+             rest     (nthrest m (min 1 nxt)) ;0 just mean that I am regenerating the first key.
+             k        (key next)
+             _        (assert (some? k))
+             v        (update-or-delete-value k)
+             changes2 (assoc changes k v)]
+         ;; see if we should add a new key to the map
+         (if false ;; (< (rand-int 10) 2)
+           (recur rest (let [k2 (keyword random-string)
+                             v2 (update-or-delete-value k2)]
+                         (assoc changes2 k2 v2)))
+           (recur rest changes2))))))
 
 
 ;; (count-by-keys [{:s1 1 :k 2}{:s1 2 :s2 3 :l 4}])
@@ -142,7 +159,7 @@
       (doseq [[expected ms] by-value]
         (assert (some? expected))
         ;; this code will only work if we have 1 thread
-        (let [hits (select-by-string :unknown k expected)
+        (let [hits (select-by :unknown k expected)
               hits-set (into #{} (map :id hits))
               ms-set (into #{} (map :id ms))]
           (assert (and
@@ -313,17 +330,17 @@
         m3 (with-tenant "three"
              (hashdb.db.commands/create! {:s1 "mats" :name "larsson"}))
         ms (with-tenant "two"
-             (hashdb.db.commands/select-by-string :unknown :s1 "mats"))
+             (hashdb.db.commands/select-by :unknown :s1 "mats"))
         _  (is (= 2 (count ms)))
         ms2 (with-tenant "three"
-              (hashdb.db.commands/select-by-string :unknown :s1 "mats"))
+              (hashdb.db.commands/select-by :unknown :s1 "mats"))
         _  (is (= 1 (count ms2)))
         ms3 (with-tenant :global
-              (hashdb.db.commands/select-by-string-global :unknown :s1 "mats"))
+              (hashdb.db.commands/select-by-global :unknown :s1 "mats"))
         _  (is (= 3 (count ms3)))
         ms4 (with-tenant "four"
               (is (thrown? Throwable    ;Exception not enough, since assert
-                           (hashdb.db.commands/select-by-string-global :unknown :s1 "mats"))))]))
+                           (hashdb.db.commands/select-by-global :unknown :s1 "mats"))))]))
 
 
 
@@ -373,7 +390,7 @@
 
 
 
-(deftest test-all-commands-with-indexes
+(deftest test-all-commands-with-string-indexes
   []
   (with-tenant :single
     (let [m1  (hashdb.db.commands/create! {:s2 "foo"})
@@ -417,7 +434,7 @@
       (println "m3")
       (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity))))))))
 
-(deftest test-all-commands-with-indexes-small
+(deftest test-all-commands-with-string-indexes-small
   (with-tenant :single
     (let [m3  (hashdb.db.commands/create! {:s1 "mattias"})
           id3 (:id m3)]
@@ -426,9 +443,24 @@
       (is (= "lena" (:s1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:s3 "foo", :s1 "lena"}))))
       (is (verify-stored-data id3))
       (is (= 2 (count (cmd/select-string-index {:id id3}))))
-      (let [found   (select-by-string :unknown :s3 "foo")
-            ntfound (select-by-string :unknown :s3 "foox")]
+      (let [found   (select-by :unknown :s3 "foo")
+            ntfound (select-by :unknown :s3 "foox")]
         (is (= "lena" (:s1 (first found))))
+        (is (empty? ntfound))))))
+
+(deftest test-all-commands-with-long-indexes-small
+  (clear-database)
+  (with-tenant :single
+    (let [m3  (hashdb.db.commands/create! {:i1 567})
+          id3 (:id m3)]
+      (is (verify-stored-data id3))
+      (is (= 10000 (:i1 (hashdb.db.commands/update! (hashdb.db.commands/get id3) {:i3 678, :i1 10000}))))
+      (is (verify-stored-data id3))
+      (is (verify-stored-data "unknown-id"))
+      (is (= 2 (count (concat (cmd/select-string-index {:id id3})(cmd/select-long-index {:id id3})))))
+      (let [found   (select-by :unknown :i3 678)
+            ntfound (select-by :unknown :i3 678678)]
+        (is (= 10000 (:i1 (first found))))
         (is (empty? ntfound))))))
 
 (deftest test-verify-row-in-sync

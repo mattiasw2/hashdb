@@ -56,6 +56,28 @@ AND    si.k      = :k
 AND    si.index_data = :index_data
 
 
+-- :name select-by-long-index :? :*
+-- :doc retrieve all rows
+SELECT l.id, l.tenant, l.entity, l.version, l.data, l.updated
+FROM   latest as l , int_index as si
+WHERE  l.entity  = :entity
+AND    l.tenant  = :tenant
+AND    si.entity = :entity
+AND    l.id      = si.id
+AND    si.k      = :k
+AND    si.index_data = :index_data
+
+-- :name select-by-long-index-global :? :*
+-- :doc retrieve all rows
+SELECT l.id, l.tenant, l.entity, l.version, l.data, l.updated
+FROM   latest as l , int_index as si
+WHERE  l.entity  = :entity
+AND    si.entity = :entity
+AND    l.id      = si.id
+AND    si.k      = :k
+AND    si.index_data = :index_data
+
+
 -- :name delete-latest! :! :n
 -- :doc delete a latest given the id
 DELETE FROM latest
@@ -150,4 +172,116 @@ WHERE ID = :id
 -- :name find-string-index :? :*
 -- :doc retrieve all entity and id that matches index_data and entity
 -- SELECT entity, id FROM string_index
+-- WHERE entity = :entity AND k = :k AND index_data = :index_data
+
+
+-- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+-- int_index
+
+-- :name create-long-index! :! :n
+-- :doc creates a new string index record
+INSERT INTO int_index
+(id, entity, k, index_data)
+VALUES (:id, :entity, :k, :index_data)
+
+-- :name upsert-long-index! :! :n
+-- :doc create or update an existing string index record
+INSERT INTO int_index
+(entity, k, id, index_data)
+VALUES (:entity, :k, :id, :index_data)
+ON DUPLICATE KEY
+UPDATE index_data = :index_data
+
+
+-- :name upsert-long-index-using-replace! :! :n
+-- :doc create or update an existing string index record
+-- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
+REPLACE INTO int_index
+(id, entity, k, index_data)
+VALUES (:id, :entity, :k, :index_data)
+
+
+
+-- :name update-long-index! :! :n
+-- :doc update an existing string index record
+UPDATE int_index
+SET index_data = :index_data
+WHERE id = :id AND entity = :entity AND k = :k
+
+-- :name delete-long-index! :! :n
+-- :doc delete a string index given the id
+DELETE FROM int_index
+WHERE id = :id
+
+-- :name delete-single-long-index! :! :n
+-- :doc delete a string index given the id and entity
+DELETE FROM int_index
+WHERE id = :id AND entity = :entity AND k = :k
+
+
+-- :name select-long-index :? :*
+-- :doc retrieve all string index rows for id
+SELECT * FROM int_index
+WHERE ID = :id
+
+-- :name find-long-index :? :*
+-- :doc retrieve all entity and id that matches index_data and entity
+-- SELECT entity, id FROM int_index
+-- WHERE entity = :entity AND k = :k AND index_data = :index_data
+
+-- ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+-- int_index
+
+-- :name create-long-index! :! :n
+-- :doc creates a new string index record
+INSERT INTO int_index
+(id, entity, k, index_data)
+VALUES (:id, :entity, :k, :index_data)
+
+-- :name upsert-long-index! :! :n
+-- :doc create or update an existing string index record
+INSERT INTO int_index
+(entity, k, id, index_data)
+VALUES (:entity, :k, :id, :index_data)
+ON DUPLICATE KEY
+UPDATE index_data = :index_data
+
+-- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
+-- https://dev.mysql.com/doc/refman/5.5/en/insert-on-duplicate.html
+
+
+-- :name upsert-long-index-using-replace! :! :n
+-- :doc create or update an existing string index record
+-- https://chartio.com/resources/tutorials/how-to-insert-if-row-does-not-exist-upsert-in-mysql/
+REPLACE INTO int_index
+(id, entity, k, index_data)
+VALUES (:id, :entity, :k, :index_data)
+
+
+
+-- :name update-long-index! :! :n
+-- :doc update an existing string index record
+UPDATE int_index
+SET index_data = :index_data
+WHERE id = :id AND entity = :entity AND k = :k
+
+-- :name delete-long-index! :! :n
+-- :doc delete a string index given the id
+DELETE FROM int_index
+WHERE id = :id
+
+-- :name delete-single-long-index! :! :n
+-- :doc delete a string index given the id and entity
+DELETE FROM int_index
+WHERE id = :id AND entity = :entity AND k = :k
+
+
+-- :name select-long-index :? :*
+-- :doc retrieve all string index rows for id
+SELECT * FROM int_index
+WHERE ID = :id
+
+-- :name find-long-index :? :*
+-- :doc retrieve all entity and id that matches index_data and entity
+-- SELECT entity, id FROM int_index
 -- WHERE entity = :entity AND k = :k AND index_data = :index_data
