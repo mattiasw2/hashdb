@@ -481,8 +481,7 @@
   "Create index entries for new record `id`."
   [before typ changes id entity]
   (assert (empty? before))
-  ;; (sort to avoid deadlock, by always adding stuff in the same order
-  (for [[k v] (sort changes)]
+  (for [[k v] changes]
     ;; no point in adding nil:s to index
     (if v [(select-index typ cmd/create-string-index! cmd/create-long-index!)
            {:id id, :entity (str-edn entity), :k (str-edn k),
@@ -504,13 +503,7 @@
                            (set key-changes) keys-before)
         should-be-created (clojure.set/difference
                            (set (keys map-changes)) keys-before)
-        ;; Sort to minimize risk of deadlock
-        ;; MySQLTransactionRollbackException Deadlock found when trying to get lock;
-        ;; try restarting transaction:
-        ;; com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
-        ;;
-        ;; Todo: If it still happends, I have to sort delete+create+update according to :k
-        to-delete (for [[k v] (sort map-deleted)]
+        to-delete (for [[k v] map-deleted]
                     ;; v = nil means deleted
                     (do
                       (assert (nil? v))
@@ -520,7 +513,7 @@
         ;; when allowed storing nil by adding s/nilable to :s1 :i1 ... I hade to comment this
         ;; (assert (= 1 res))))
 
-        to-create (for [k (sort should-be-created)]
+        to-create (for [k should-be-created]
                     ;; no point in adding nil:s to index, so should never happen,
                     ;; even if has nil value
                     (do (assert (k changes))
@@ -528,7 +521,7 @@
                          {:id id, :entity (str-edn entity), :k (str-edn k)
                           :index_data (select-index typ (str-index (k changes)) (k changes))}]))
 
-        to-update (for [k (sort should-be-updated)]
+        to-update (for [k should-be-updated]
                     ;; the let cannot be moved into the doseq, that is something different
                     (let [v (k changes)]
                       ;; update to nil, same as deleting (but this case should not happen
@@ -807,12 +800,6 @@
   []
   (select-all-nil-entity :unknown))
 
-;; (cmd/select-by-string-index {:entity ":unknown" :k ":s1" :index_data "lena"})
-
-;; TODO select-by-long
-;; TODO select-by-long-global
-;;
-;; or should I only have select-by ???
 
 (s/fdef select-by
         :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
@@ -1083,7 +1070,6 @@
    If not, print out warning and return false."
   [id]
   (let [m           (try-get id)
-        ;; TODO: select-long-index
         idxs        (concat (cmd/select-string-index {:id id}) (cmd/select-long-index {:id id}))
         idxs-as-map (into {}
                           (map (fn [idx] [(clojure.edn/read-string (:k idx))
