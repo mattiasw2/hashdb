@@ -578,13 +578,6 @@
           (update-indexes-one-type-delete! changes typ id))))
 
 
-(defn apply-dbcommands
-  "Order and than run all index db commands."
-  [conn cmds]
-  (doseq [[f & args] cmds]
-    (when f
-      (apply f (cons conn args)))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; ## Avoid deadlock when updating index tables
 ;;
@@ -597,6 +590,22 @@
 ;; sort them, and then run them. Hopefully, this solves all deadlock problems
 ;; since latest and history are always updated before (in that order, and just a single row),
 ;; I expect there will be no other deadlock scenarios.
+
+;; (test-many-parallel :n 100 :par 10 :delay 500)
+;; results in
+;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+;; UNLESS we sort them according to :entity :k :id
+
+(defn apply-dbcommands-prevent-deadlock
+  "Order and than run all index db commands.
+   We order according to primary index, :entity :k :id."
+  [conn cmds]
+  (let  [sorted (sort
+                 (map (fn [[f m]] [[(:entity m)(:k m)(:id m)] f m])
+                      (filter some? cmds)))]
+    (doseq [[_ f m] sorted]
+      ;; todo: we can add expected affected rows and verify we get what we expect.
+      (f conn m))))
 
 
 (s/fdef update-indexes!
@@ -620,7 +629,7 @@
         (if (or before0 changes0)
           ;; changes0 required to be map according to spec
           (let [dbcommands (update-indexes-one-type! sql-op typ m before0 (or changes0 {}))]
-            (apply-dbcommands conn dbcommands)))))))
+            (apply-dbcommands-prevent-deadlock conn dbcommands)))))))
 
 
 
@@ -634,7 +643,7 @@
    string and integer indexed keys."
   [conn id]
   (doseq [typ [:string :long]]
-    (apply-dbcommands conn (update-indexes-one-type-delete! {} typ id))))
+    (apply-dbcommands-prevent-deadlock conn (update-indexes-one-type-delete! {} typ id))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # Create: Insert map `m` into db.
