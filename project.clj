@@ -19,7 +19,7 @@
                  [mount "0.1.11"]
                  ;; cannot be upgraded to 8.0.8, since it doesn't exist
                  [mysql/mysql-connector-java "6.0.5"]
-                 [org.clojure/clojure "1.9.0-beta4"]
+                 [org.clojure/clojure "1.9.0-RC1"]
                  [org.clojure/clojurescript "1.9.946"] ;; :scope "provided"
                  [org.clojure/java.jdbc "0.7.3"]
                  [org.clojure/tools.cli "0.3.5"]
