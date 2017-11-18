@@ -80,10 +80,11 @@
 
 (defn- update-or-delete-value
   [k]
-  (cond (< (rand-int 10) 3)        nil
-        (#{:i1 :i2 :i3 :i4 :i5} k) (rand-int 2147483647)
-        ;; true for all other data incl :s1 :s2 :s3 :s4 :s5
-        true                       (random-string)))
+  ;; for now, we cannot delete indexed keys, since ::s1 etc is not nilable
+  (cond (and (< (rand-int 10) 3) (not (possible-keys k))) nil
+        (#{:i1 :i2 :i3 :i4} k)                                             (rand-int 2147483647)
+        ;; true for all other data incl :s1 :s2 :s3 :s4
+        true                                                                   (random-string)))
 
 
 ;; (create-update-operation {:a 1 :b 2 :c 3 :d 4})
@@ -117,8 +118,8 @@
              v        (update-or-delete-value k)
              changes2 (assoc changes k v)]
          ;; see if we should add a new key to the map
-         (if false ;; (< (rand-int 10) 2)
-           (recur rest (let [k2 (keyword random-string)
+         (if (< (rand-int 10) 2)
+           (recur rest (let [k2 (keyword (random-string))
                              v2 (update-or-delete-value k2)]
                          (assoc changes2 k2 v2)))
            (recur rest changes2))))))
