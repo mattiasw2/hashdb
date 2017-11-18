@@ -63,6 +63,10 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
  * Decide if we should only handle the first index by the database, and the rest by filtering inside Clojure.
  * Should we store as JSON instead of EDN, to make other clients easily read the data?
 
+### Possible experiments
+
+ * Using sequential uuids, https://github.com/danlentz/clj-uuid#sequential-temporal-namespace
+
 ## Project template
 
 Generated using Luminus version "2.9.11.91" incl a webserver. That part isn't needed, and maybe I will remove the non-db parts later.

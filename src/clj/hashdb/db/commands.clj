@@ -339,16 +339,29 @@
   (do
     ;; during testing, there are the keys that are indexed
     ;; todo: decide if I should keep nil values in m, when storing in latest.
+    (if false
+      (do
+        (s/def ::s1 string?)
+        (s/def ::s2 string?)
+        (s/def ::s3 string?)
+        (s/def ::s4 string?)
+        ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
+        (s/def ::i1 (s/and int? #(< (Math/abs %) 9223372036854775808)))
+        (s/def ::i2 (s/and int? #(< (Math/abs %) 9223372036854775808)))
+        (s/def ::i3 (s/and int? #(< (Math/abs %) 9223372036854775808)))
+        (s/def ::i4 (s/and int? #(< (Math/abs %) 9223372036854775808))))
+      (do
+        (s/def ::s1 (s/nilable string?))
+        (s/def ::s2 (s/nilable string?))
+        (s/def ::s3 (s/nilable string?))
+        (s/def ::s4 (s/nilable string?))
+        ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
+        (s/def ::i1 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+        (s/def ::i2 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+        (s/def ::i3 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+        (s/def ::i4 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))))
     (def possible-keys #{:s1 :s2 :s3 :s4 :i1 :i2 :i3 :i4})
-    (s/def ::s1 (s/nilable string?))
-    (s/def ::s2 (s/nilable string?))
-    (s/def ::s3 (s/nilable string?))
-    (s/def ::s4 (s/nilable string?))
-    ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
-    (s/def ::i1 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
-    (s/def ::i2 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
-    (s/def ::i3 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
-    (s/def ::i4 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+
     (s/def ::indexed-data
       (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
                        ::i1 ::i2 ::i3 ::i4]))
@@ -447,15 +460,17 @@
 ;; i.e. first for :string, then for :int
 
 (s/fdef keep-difference-by-type
-        :args (s/cat :changes ::changes :idx-info ::idx-info)
+        :args (s/cat :changes ::changes :idx-info ::idx-info :pred any?)
         :ret  ::data)
 
 (defn keep-difference-by-type
   "Only keep the changes keys that have indexes.
    Group these by type, e.g. :string :int..."
-  [changes [idx-types idx-keys]]
+  [changes [idx-types idx-keys] pred]
   (if-not changes {}
-          (let [changes-relevant (select-keys changes idx-keys)
+          (let [changes-relevant (if pred
+                                   (into {} (filter pred (select-keys changes idx-keys)))
+                                   (select-keys changes idx-keys))
                 changes-grouped  (mapify-values
                                   (group-by #(idx-types (key %))
                                             changes-relevant))]
@@ -464,19 +479,18 @@
 
 (defn- update-indexes-one-type-create!
   "Create index entries for new record `id`."
-  [conn before typ changes id entity]
+  [before typ changes id entity]
   (assert (empty? before))
   ;; (sort to avoid deadlock, by always adding stuff in the same order
-  (doseq [[k v] (sort changes)]
+  (for [[k v] (sort changes)]
     ;; no point in adding nil:s to index
-    (if v ((select-index typ cmd/create-string-index! cmd/create-long-index!)
-           conn
+    (if v [(select-index typ cmd/create-string-index! cmd/create-long-index!)
            {:id id, :entity (str-edn entity), :k (str-edn k),
-            :index_data (select-index typ (str-index v) v)}))))
+            :index_data (select-index typ (str-index v) v)}])))
 
 (defn- update-indexes-one-type-update!
   "Update index entries for already existing record `id`."
-  [conn before changes typ id entity]
+  [before changes typ id entity]
   (let [keys-before (set (keys before))
         keys-changes0 (set (keys changes))
         disappeared(clojure.set/difference keys-before keys-changes0)
@@ -489,43 +503,44 @@
         should-be-updated (clojure.set/intersection
                            (set key-changes) keys-before)
         should-be-created (clojure.set/difference
-                           (set (keys map-changes)) keys-before)]
-    ;; Sort to minimize risk of deadlock
-    ;; MySQLTransactionRollbackException Deadlock found when trying to get lock;
-    ;; try restarting transaction:
-    ;; com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
-    ;;
-    ;; Todo: If it still happends, I have to sort delete+create+update according to :k
-    (doseq [[k v] (sort map-deleted)]
-      ;; v = nil means deleted
-      (assert (nil? v))
-      (let [res ((select-index typ cmd/delete-single-string-index! cmd/delete-single-long-index!)
-                 conn {:id id, :entity (str-edn entity), :k (str-edn k)})]))
+                           (set (keys map-changes)) keys-before)
+        ;; Sort to minimize risk of deadlock
+        ;; MySQLTransactionRollbackException Deadlock found when trying to get lock;
+        ;; try restarting transaction:
+        ;; com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
+        ;;
+        ;; Todo: If it still happends, I have to sort delete+create+update according to :k
+        to-delete (for [[k v] (sort map-deleted)]
+                    ;; v = nil means deleted
+                    (do
+                      (assert (nil? v))
+                      [(select-index typ cmd/delete-single-string-index! cmd/delete-single-long-index!)
+                       {:id id, :entity (str-edn entity), :k (str-edn k)}]))
 
-    ;; when allowed storing nil by adding s/nilable to :s1 :i1 ... I hade to comment this
-    ;; (assert (= 1 res))))
+        ;; when allowed storing nil by adding s/nilable to :s1 :i1 ... I hade to comment this
+        ;; (assert (= 1 res))))
 
-    (doseq [k (sort should-be-created)]
-      ;; no point in adding nil:s to index, so should never happen,
-      ;; even if has nil value
-      (assert (k changes))
-      (let [res ((select-index typ cmd/create-string-index! cmd/create-long-index!)
-                 conn {:id id, :entity (str-edn entity), :k (str-edn k)
-                       :index_data (select-index typ (str-index (k changes)) (k changes))})]
-        (assert (= 1 res))))
-    (doseq [k (sort should-be-updated)]
-      ;; the let cannot be moved into the doseq, that is something different
-      (let [v (k changes)]
-        ;; update to nil, same as deleting (but this case should not happen
-        ;; since then changes will not fulfil ::data)
-        (assert v)
-        ;; verify that string indexes are strings, and int indexes are ints.
-        (assert (select-index typ (string? v) (int? v))
-                (str "Not expected type '" typ "' '" v "'"))
-        ((select-index typ cmd/update-string-index! cmd/update-long-index!)
-         conn {:id id, :entity (str-edn entity), :k (str-edn k)
-               :index_data (select-index typ (str-index v) v)})))
-    nil))
+        to-create (for [k (sort should-be-created)]
+                    ;; no point in adding nil:s to index, so should never happen,
+                    ;; even if has nil value
+                    (do (assert (k changes))
+                        [(select-index typ cmd/create-string-index! cmd/create-long-index!)
+                         {:id id, :entity (str-edn entity), :k (str-edn k)
+                          :index_data (select-index typ (str-index (k changes)) (k changes))}]))
+
+        to-update (for [k (sort should-be-updated)]
+                    ;; the let cannot be moved into the doseq, that is something different
+                    (let [v (k changes)]
+                      ;; update to nil, same as deleting (but this case should not happen
+                      ;; since then changes will not fulfil ::data)
+                      (assert v)
+                      ;; verify that string indexes are strings, and int indexes are ints.
+                      (assert (select-index typ (string? v) (int? v))
+                              (str "Not expected type '" typ "' '" v "'"))
+                      [(select-index typ cmd/update-string-index! cmd/update-long-index!)
+                       {:id id, :entity (str-edn entity), :k (str-edn k)
+                        :index_data (select-index typ (str-index v) v)}]))]
+    (concat to-delete to-create to-update)))
 
 
 ;; For delete, we can just delete all index entries at once
@@ -534,10 +549,9 @@
 ;; there are none.
 (defn- update-indexes-one-type-delete!
   "Delete al index entries for record `id`."
-  [conn changes typ id]
+  [changes typ id]
   (assert (empty? changes))
-  ((select-index typ cmd/delete-string-index! cmd/delete-long-index!) conn {:id id})
-  nil)
+  [[(select-index typ cmd/delete-string-index! cmd/delete-long-index!) {:id id}]])
 
 
 ;; Are we creating a new record, updating an existing, or deleting an old one?
@@ -545,23 +559,44 @@
 
 
 (s/fdef update-indexes-one-type!
-        :args (s/cat :conn any? :sql-op ::sql-op :typ ::idx-type :m ::data
+        :args (s/cat :sql-op ::sql-op :typ ::idx-type :m ::data
                      :before (s/nilable ::data) :changes ::changes)
-        :ret nil?)
+        :ret any?)
 
 (defn update-indexes-one-type!
   "Update the index entries for record `m`.
    sql-op tells if `m` is a new record, an existing,
    or if the record `m` will be removed."
-  [conn sql-op typ m before changes]
+  [sql-op typ m before changes]
   (let [id (:id m)
         entity (:entity m)]
     (cond (= :create sql-op)
-          (update-indexes-one-type-create! conn before typ changes id entity)
+          (update-indexes-one-type-create! before typ changes id entity)
           (= :update sql-op)
-          (update-indexes-one-type-update! conn before changes typ id entity)
+          (update-indexes-one-type-update! before changes typ id entity)
           (= :delete sql-op)
-          (update-indexes-one-type-delete! conn changes typ id))))
+          (update-indexes-one-type-delete! changes typ id))))
+
+
+(defn apply-dbcommands
+  "Order and than run all index db commands."
+  [conn cmds]
+  (doseq [[f & args] cmds]
+    (when f
+      (apply f (cons conn args)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ## Avoid deadlock when updating index tables
+;;
+;; Collect all index db operations and sort. Top-level for all index updating:
+;;
+;; * `update-indexes!`
+;; * `delete-indexes-without-data!`
+;;
+;; Algorithm: I collect all operations onto this level,
+;; sort them, and then run them. Hopefully, this solves all deadlock problems
+;; since latest and history are always updated before (in that order, and just a single row),
+;; I expect there will be no other deadlock scenarios.
 
 
 (s/fdef update-indexes!
@@ -575,14 +610,17 @@
    If it is a delete, changes should be nil."
   [conn sql-op m before changes]
   (let [idx-info         (indexes m)
-        before-relevant  (keep-difference-by-type before idx-info)
-        changes-relevant (keep-difference-by-type changes idx-info)]
+        before-relevant  (keep-difference-by-type before idx-info
+                                                  (fn [[k v]] (some? v)))
+        changes-relevant (keep-difference-by-type changes idx-info
+                                                  nil)]
     (doseq [typ [:string :long]]
-      (let [before0 (typ before-relevant)
+      (let [before0  (typ before-relevant)
             changes0 (typ changes-relevant)]
         (if (or before0 changes0)
           ;; changes0 required to be map according to spec
-          (update-indexes-one-type! conn sql-op typ m before0 (or changes0 {})))))))
+          (let [dbcommands (update-indexes-one-type! sql-op typ m before0 (or changes0 {}))]
+            (apply-dbcommands conn dbcommands)))))))
 
 
 
@@ -596,7 +634,7 @@
    string and integer indexed keys."
   [conn id]
   (doseq [typ [:string :long]]
-    (update-indexes-one-type-delete! conn {} typ id)))
+    (apply-dbcommands conn (update-indexes-one-type-delete! {} typ id))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # Create: Insert map `m` into db.
@@ -1032,7 +1070,7 @@
       (let [idx-info    (indexes m)
             ;; filter nil values, since these do not have an index entry
             idx-values  (into {} (filter (fn [[k v]] (some? v))(select-keys m (second idx-info))))
-            diff        (keep-difference-by-type m idx-info)]
+            diff        (keep-difference-by-type m idx-info nil)]
         (and (or (zero? (count idxs))
                  (= (:entity m)
                     (clojure.edn/read-string (:entity (first idxs)))))
