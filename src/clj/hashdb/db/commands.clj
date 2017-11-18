@@ -586,15 +586,29 @@
 ;; * `update-indexes!`
 ;; * `delete-indexes-without-data!`
 ;;
-;; Algorithm: I collect all operations onto this level,
-;; sort them, and then run them. Hopefully, this solves all deadlock problems
-;; since latest and history are always updated before (in that order, and just a single row),
+;; Above the index table, all SQL commands should update the SQL tables in this order:
+;;
+;; * latest
+;; * history
+;; * string_index
+;; * int_index
+;;
+;; Algorithm:
+;;
+;; * The global order of latest history string_index and int_index is handle by ordering in the code written
+;; * For the (string|int)_index table:
+;;  * I collect all operations onto this level,
+;;  * Sort them, and then run them.
+;;
 ;; I expect there will be no other deadlock scenarios.
 
-;; (test-many-parallel :n 100 :par 10 :delay 500)
-;; results in
-;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
-;; UNLESS we sort them according to :entity :k :id
+;; Before this ordering, this call
+;;
+;;     (test-many-parallel :n 100 :par 10 :delay 500)
+;;
+;; resulted in
+;;
+;;     MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
 
 (defn apply-dbcommands-prevent-deadlock
   "Order and than run all index db commands.
