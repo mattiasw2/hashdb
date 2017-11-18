@@ -81,7 +81,8 @@
 (defn- update-or-delete-value
   [k]
   ;; for now, we cannot delete indexed keys, since ::s1 etc is not nilable
-  (cond (and (< (rand-int 10) 3) (not (possible-keys k))) nil
+  ;; (cond (and (< (rand-int 10) 3) (not (possible-keys k))) nil)
+  (cond (< (rand-int 10) 3) nil
         (#{:i1 :i2 :i3 :i4} k)                                             (rand-int 2147483647)
         ;; true for all other data incl :s1 :s2 :s3 :s4
         true                                                                   (random-string)))
