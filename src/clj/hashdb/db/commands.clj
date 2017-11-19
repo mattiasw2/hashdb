@@ -413,6 +413,12 @@
         :ret  ::idx-info)
 
 ;; TODO: implement a function that returns this list.
+;; We could just look at the entity for indexes, and then `delete-indexes-without-data!`
+;; could be efficiently implemented. Right now it looks into both int_index and string_index tables.
+;; Most likely, I will not look into other fields than entity, but let us see.
+;; For example, for frm, what should be the entity? :frm or frm-id? The advantage using frm-id, is that
+;; indexing will be better, the disadvantage is I only can have one "else", so uuid as entity for ins
+;; will be assumed to be a frm.
 ;;
 ;; TODO: For now, it is hard-coded. Only works for test-cases
 (defn indexes
@@ -800,6 +806,10 @@
   []
   (select-all-nil-entity :unknown))
 
+;; TODO: We cannot verify that the query is valid if `indexes` needs `m` as
+;; argument. If we restrict it to `:tenant` and `:entity`, we can check that
+;; `:k` is indexed.
+;; We can also verify the type of the argument to `select-by` with the index-type
 
 (s/fdef select-by
         :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
