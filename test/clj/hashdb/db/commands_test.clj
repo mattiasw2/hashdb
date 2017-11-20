@@ -16,8 +16,80 @@
             BatchUpdateException
             PreparedStatement]))
 
-(s/def ::small-map (s/and map? #(< (count %) 20)))
-(s/def ::large-map (s/and map? #(> (count %) 200)))
+(s/def ::small-map
+  (s/and map? #(< (count %) 20)))
+
+(s/def ::large-map
+  (s/and map? #(> (count %) 200)))
+
+;; ## ::data is the data stored in the hashdb
+;;
+;; We use two different specs, one for development (or actually test-case
+;; data generation), and one for production.
+;;
+;; My first attempt was like this, however, then I cannot force the
+;; data for the keys :s1 :s2 :s3 :s4 to be strings
+;;
+;;     (s/def ::key
+;;       (dev-spec-or :normal keyword? :dev #{:a :b :c :d :e}))
+;;     (s/def ::data
+;;       (s/map-of ::key any?))
+;;
+;; The correct way is to use s/merge and s/keys, which merges maps.
+;;
+
+;; during testing, there are the keys that are indexed
+;; todo: decide if I should keep nil values in m, when storing in latest.
+(if false
+  (do
+    (s/def ::s1 string?)
+    (s/def ::s2 string?)
+    (s/def ::s3 string?)
+    (s/def ::s4 string?)
+    ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
+    (s/def ::i1 (s/and int? #(< (Math/abs %) 9223372036854775808)))
+    (s/def ::i2 (s/and int? #(< (Math/abs %) 9223372036854775808)))
+    (s/def ::i3 (s/and int? #(< (Math/abs %) 9223372036854775808)))
+    (s/def ::i4 (s/and int? #(< (Math/abs %) 9223372036854775808))))
+  (do
+    (s/def ::s1 (s/nilable string?))
+    (s/def ::s2 (s/nilable string?))
+    (s/def ::s3 (s/nilable string?))
+    (s/def ::s4 (s/nilable string?))
+    ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
+    (s/def ::i1 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+    (s/def ::i2 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+    (s/def ::i3 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
+    (s/def ::i4 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))))
+
+(def possible-keys #{:s1 :s2 :s3 :s4 :i1 :i2 :i3 :i4})
+
+(s/def ::indexed-data
+  (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
+                   ::i1 ::i2 ::i3 ::i4]))
+
+;; ## ::short-keyword always  has between 1 and 4 chars!
+;;
+;;     (gen/sample
+;;      (gen/fmap
+;;       #(keyword (substring+ % 0 4))
+;;       (gen/string-alphanumeric)))
+;;     => (: :n : :mi0 :1 :90G : :qDAv :5VDc :11)
+(s/def ::short-keyword
+  (s/with-gen keyword?
+    #(gen/fmap (fn [k] (keyword (let [str (substring+ k 0 4)]
+                                  (if (empty? str) "s1" str))))
+               (gen/string-alphanumeric))))
+
+(s/def ::test-data-core
+  (s/map-of ::short-keyword any?))
+
+(s/def ::test-data
+  ;; ::indexed-data should be first, it created samples without any :s1 :s2 :s3 :s4
+  (s/merge ::indexed-data ::test-data-core))
+  ;; (s/map-of keyword? any?)
+  ;; any?)
+
 
 (defn play-with-spec-test
   []
@@ -31,7 +103,7 @@
 
 ;; with compression
 
-;; (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+;; (timed "exercise" (def m2s (mapv first (s/exercise ::test-data 1000))))
 
 ;; hashdb.db.commands-test> (timed "create!" (def saved-m2s (mapv create! m2s)))
 ;; "Timed: create! : 16609.213303 msecs"
@@ -50,13 +122,13 @@
 
 
 ;; the above performance is for 1 thread, i.e. depends on latency
-;; (timed "exercise" (def m2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+;; (timed "exercise" (def m2s (mapv first (s/exercise ::test-data 1000))))
 ;; "Timed: exercise : 15841.978657 msecs"
 ;; #'hashdb.db.commands-test/m2s
 ;; hashdb.db.commands-test> (timed "" (doseq [m m2s] (create! m)))
 ;; "Timed:  doseq: 8725.000227 msecs"
 ;; nil
-;; hashdb.db.commands-test> (timed "exercise" (def n2s (mapv first (s/exercise :hashdb.db.commands/data 1000))))
+;; hashdb.db.commands-test> (timed "exercise" (def n2s (mapv first (s/exercise ::test-data 1000))))
 ;; "Timed: exercise : 15583.56395 msecs"
 ;; #'hashdb.db.commands-test/n2s
 ;; hashdb.db.commands-test> (future (timed "" (doseq [m m2s] (create! m))))
@@ -94,7 +166,7 @@
 ;; =>{:b nil}
 
 (s/fdef create-update-operation
-        :args (s/or :base (s/cat :m :hashdb.db.commands/data)
+        :args (s/or :base (s/cat :m ::test-data)
                     ;; not ::data any more on recursion, since we called filter
                     :rec  (s/cat :m any? :changes :hashdb.db.commands/changes))
         :ret  :hashdb.db.commands/changes)
@@ -196,8 +268,13 @@
 
 
 
+
+(defn- generate-samples
+  [n]
+  (timed "exercise" (mapv first (s/exercise ::test-data n))))
+
 (s/fdef test-many
-        :args (s/cat :samples (s/coll-of :hashdb.db.commands/data))
+        :args (s/cat :samples (s/coll-of ::test-data))
         :ret  nil?)
 
 (defn test-many
@@ -210,7 +287,7 @@
 (defn test-many-n
   [n]
   (with-tenant :single
-    (let [d (mapv first (s/exercise :hashdb.db.commands/data n))]
+    (let [d (generate-samples n)]
       (def src d)
       (test-many d))))
 
@@ -219,12 +296,13 @@
 ;; https://spootnik.org/entries/2017/01/09/an-adventure-with-clocks-component-and-spec/
 (defn check-test-many
   []
-  (stest/check-fn `test-many (s/fspec :args (s/cat :samples (s/coll-of :hashdb.db.commands/data)) :ret  nil?)))
+  (stest/check-fn `test-many (s/fspec :args (s/cat :samples (s/coll-of ::test-data)) :ret  nil?)))
 
 ;; MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
 ;; in create!
 ;; when running (test-many-parallel :n 100 :par 10 :delay 2000)
 ;; and (test-many-parallel :n 100 :par 10 :delay 500)  on the 9th thread doing create!
+
 (defn test-many-parallel
   "Test in parallel.
    If just one thread, the indexes will also be verified."
@@ -233,7 +311,7 @@
            par 2
            delay 2000}}]
   (with-tenant :single
-    (let [samples (timed "exercise" (mapv first (s/exercise :hashdb.db.commands/data n)))]
+    (let [samples (generate-samples n)]
       (clear-database)
       (->>
        (range par)
@@ -512,37 +590,6 @@
     (is (= 2 (hashdb.db.core/upsert-string-index-using-replace! {:id id :entity entity :k k :index_data "bar"})))
     (is (= 1 (hashdb.db.core/delete-string-index! {:id id :entity entity})))))
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; spec test when using filter on maps
-
-(s/def ::test-id int?)
-(s/def ::test-data string?)
-
-(s/def ::test1
-  (s/keys :req-un [::test-id ::test-data]))
-
-(s/fdef spec-test
-        :args (s/cat :m ::test1)
-        :ret  int?)
-
-(defn spec-test
-  [m]
-  (count m))
-
-(def test1-sample {:test-id 1 :test-data "hello"})
-
-(defn works
-  []
-  (spec-test test1-sample))
-
-(defn works-not-which-is-ok
-  []
-  (spec-test (dissoc test1-sample :test-data)))
-
-(defn works-not-which-is-not-ok
-  []
-  (spec-test (filter (fn [_] true) test1-sample)))
 
 
 (orchestra.spec.test/instrument)

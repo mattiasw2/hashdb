@@ -282,18 +282,6 @@
 ;;
 
 
-;; ## ::short-keyword always  has between 1 and 4 chars!
-;;
-;;     (gen/sample
-;;      (gen/fmap
-;;       #(keyword (substring+ % 0 4))
-;;       (gen/string-alphanumeric)))
-;;     => (: :n : :mi0 :1 :90G : :qDAv :5VDc :11)
-(s/def ::short-keyword
-  (s/with-gen keyword?
-    #(gen/fmap (fn [k] (keyword (let [str (substring+ k 0 4)]
-                                  (if (empty? str) "s1" str))))
-               (gen/string-alphanumeric))))
 
 (s/def ::datetime (dev-with-gen
                    #(or
@@ -317,57 +305,6 @@
 (s/def ::sessionid (s/nilable ::uuid-str))
 (s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
 
-;; ## ::data is the data stored in the hashdb
-;;
-;; We use two different specs, one for development (or actually test-case
-;; data generation), and one for production.
-;;
-;; My first attempt was like this, however, then I cannot force the
-;; data for the keys :s1 :s2 :s3 :s4 to be strings
-;;
-;;     (s/def ::key
-;;       (dev-spec-or :normal keyword? :dev #{:a :b :c :d :e}))
-;;     (s/def ::data
-;;       (s/map-of ::key any?))
-;;
-;; The correct way is to use s/merge and s/keys, which merges maps.
-;;
-
-(if-not (:dev env)
-  (s/def ::data
-    (s/map-of keyword? any?))
-  (do
-    ;; during testing, there are the keys that are indexed
-    ;; todo: decide if I should keep nil values in m, when storing in latest.
-    (if false
-      (do
-        (s/def ::s1 string?)
-        (s/def ::s2 string?)
-        (s/def ::s3 string?)
-        (s/def ::s4 string?)
-        ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
-        (s/def ::i1 (s/and int? #(< (Math/abs %) 9223372036854775808)))
-        (s/def ::i2 (s/and int? #(< (Math/abs %) 9223372036854775808)))
-        (s/def ::i3 (s/and int? #(< (Math/abs %) 9223372036854775808)))
-        (s/def ::i4 (s/and int? #(< (Math/abs %) 9223372036854775808))))
-      (do
-        (s/def ::s1 (s/nilable string?))
-        (s/def ::s2 (s/nilable string?))
-        (s/def ::s3 (s/nilable string?))
-        (s/def ::s4 (s/nilable string?))
-        ;; mysql BIGINT 8 bytes:  -9223372036854775808	9223372036854775807
-        (s/def ::i1 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
-        (s/def ::i2 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
-        (s/def ::i3 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))
-        (s/def ::i4 (s/nilable (s/and int? #(< (Math/abs %) 9223372036854775808))))))
-    (def possible-keys #{:s1 :s2 :s3 :s4 :i1 :i2 :i3 :i4})
-
-    (s/def ::indexed-data
-      (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
-                       ::i1 ::i2 ::i3 ::i4]))
-    (s/def ::data
-      ;; ::indexed-data should be first, it created samples without any :s1 :s2 :s3 :s4
-      (s/merge ::indexed-data (s/map-of ::short-keyword any?)))))
 
 ;; `::changes` are the set of key-value pairs that are used to update the stored data
 ;; for changes, it is okay to set nil, which means remove key
@@ -375,15 +312,18 @@
   (s/map-of keyword? (s/nilable any?)))
 
 
-;; The complete stored data.
-;;
-;; TODO: where is ::data?
+;; The business part of the map
+(s/def ::data
+  (s/map-of keyword? any?))
+
+;; The complete map incl the keywords added by hashdb
 (s/def ::stored-latest
   (s/merge
    (s/keys :req-un [::id ::tenant ::entity ::updated ::version]
            :opt-un [])
    (s/map-of keyword? any?)))
 
+;; The complete map excl the hashdb keys, except those you can set during create!
 (s/def ::unstored-latest
   (s/merge
    (s/keys :req-un []
