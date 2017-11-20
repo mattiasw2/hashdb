@@ -316,6 +316,11 @@
 (s/def ::data
   (s/map-of keyword? any?))
 
+;; The indexes are defined by tenant and entity.
+(s/def ::select-index
+  (s/keys :req-un [::tenant ::entity]
+          :opt-un []))
+
 ;; The complete map incl the keywords added by hashdb
 (s/def ::stored-latest
   (s/merge
@@ -353,8 +358,9 @@
   (s/tuple (s/map-of keyword? ::idx-type)
            (s/coll-of keyword? :into #{})))
 
+;; Only use tenant + entity (as keyword)
 (s/fdef indexes
-        :args (s/cat :m ::data)
+        :args (s/cat :m ::select-index)
         :ret  ::idx-info)
 
 ;; TODO: implement a function that returns this list.
