@@ -141,7 +141,6 @@
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
   []
-  (println ".")
   (migrations/migrate ["reset"] (select-keys env [:database-url])))
 
 
@@ -464,7 +463,6 @@
       (is (= 3 (count (hashdb.db.commands/history id1))))
       (is (= 3 (count (hashdb.db.commands/history id2))))
       (is (= 3 (count (hashdb.db.commands/history-short id2))))
-      (println "m3")
       (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity))))))))
 
 
@@ -511,7 +509,6 @@
       (is (= 3 (count (hashdb.db.commands/history id1))))
       (is (= 3 (count (hashdb.db.commands/history id2))))
       (is (= 3 (count (hashdb.db.commands/history-short id2))))
-      (println "m3")
       (is (< 4 (count (take 10 (hashdb.db.commands/history-nil-entity))))))))
 
 (deftest test-all-commands-with-string-indexes-small
