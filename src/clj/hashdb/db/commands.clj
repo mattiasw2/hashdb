@@ -374,17 +374,22 @@
 (s/def ::changes
   (s/map-of keyword? (s/nilable any?)))
 
+
 ;; The complete stored data.
 ;;
 ;; TODO: where is ::data?
-(s/def ::create-latest
-  (s/keys :req-un [::id ::entity ::updated ::version]
-          ;; ::tenant optional since optional for create!
-          :opt-un [::tenant]))
-
 (s/def ::stored-latest
-  (s/keys :req-un [::id ::tenant ::entity ::updated ::version]
-          :opt-un []))
+  (s/merge
+   (s/keys :req-un [::id ::tenant ::entity ::updated ::version]
+           :opt-un [])
+   (s/map-of keyword? any?)))
+
+(s/def ::unstored-latest
+  (s/merge
+   (s/keys :req-un []
+           ;; ::updated ::version is not allowed
+           :opt-un [::id ::tenant ::entity])
+   (s/map-of keyword? any?)))
 
 ;; The history record.
 (s/def ::stored-history
@@ -662,14 +667,15 @@
 ;; # Create: Insert map `m` into db.
 
 (s/fdef create!
-        :args (s/cat :m ::data)
-        :ret ::create-latest)
+        :args (s/cat :m ::unstored-latest)
+        :ret ::stored-latest)
 
 (defn create!
   "Insert map `m` into db.
    If `:id` is in `m`, use it, otherwise create one.
    Return the map incl the potentially created id."
   [m]
+  (assert (and (nil? (:updated m))(nil? (:version m))) "Never set :updated and :version")
   (let [id0        (or (:id m) (uuid))
         tenant     (or (:tenant m) (get-tenant))
         tenant-str (tenant->str tenant)
@@ -913,7 +919,7 @@
 ;; # Delete single record `m` from database db
 
 (s/fdef delete!
-        :args (s/cat :m ::data)
+        :args (s/cat :m ::stored-latest)
         :ret nil?)
 
 (defn delete!
