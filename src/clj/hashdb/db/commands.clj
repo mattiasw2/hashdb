@@ -372,14 +372,21 @@
 ;; will be assumed to be a frm.
 ;;
 ;; TODO: For now, it is hard-coded. Only works for test-cases
+
+
+(def ^:dynamic *indexes-fn* nil)
+
+(defn set-*indexes-fn*
+  [fn]
+  (def ^:dynamic *indexes-fn* fn))
+
 (defn indexes
   "Depending on the entity and other fields in `m`, return the indexes.
    Only non-nil values will be indexed."
   ;; TODO: depends on (get-tenant)
   [m]
-  (let [raw {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
-             :i1 :long,   :i2 :long,   :i3 :long,   :i4 :long}]
-    [raw (into #{} (map key raw))]))
+  (if *indexes-fn* (*indexes-fn* m)
+      (assert false "Please set *indexes-fn* using set-*indexes-fn*")))
 
 
 (s/fdef select-index

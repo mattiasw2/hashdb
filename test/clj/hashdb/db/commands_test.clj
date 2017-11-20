@@ -68,6 +68,14 @@
   (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
                    ::i1 ::i2 ::i3 ::i4]))
 
+(defn test-indexes
+  [m]
+  (let [raw {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
+             :i1 :long,   :i2 :long,   :i3 :long,   :i4 :long}]
+    [raw (into #{} (map key raw))]))
+
+(set-*indexes-fn* test-indexes)
+
 ;; ## ::short-keyword always  has between 1 and 4 chars!
 ;;
 ;;     (gen/sample
