@@ -318,8 +318,9 @@
 
 ;; The indexes are defined by tenant and entity.
 (s/def ::select-index
-  (s/keys :req-un [::tenant ::entity]
-          :opt-un []))
+  (s/keys :req-un [::entity]
+          ;; if :tenant not set, I will use (get-tenant)
+          :opt-un [::tenant]))
 
 ;; The complete map incl the keywords added by hashdb
 (s/def ::stored-latest
@@ -358,10 +359,6 @@
   (s/tuple (s/map-of keyword? ::idx-type)
            (s/coll-of keyword? :into #{})))
 
-;; Only use tenant + entity (as keyword)
-(s/fdef indexes
-        :args (s/cat :m ::select-index)
-        :ret  ::idx-info)
 
 ;; TODO: implement a function that returns this list.
 ;; We could just look at the entity for indexes, and then `delete-indexes-without-data!`
@@ -374,19 +371,33 @@
 ;; TODO: For now, it is hard-coded. Only works for test-cases
 
 
-(def ^:dynamic *indexes-fn* nil)
+(defonce ^:dynamic *indexes-fn* nil)
 
 (defn set-*indexes-fn*
+  "The function to call to get the indexes for a special {:tenant XX, :enity YY}.
+   TIP: you should be able to memoize the function, unless the indexes can change during
+   runtime."
   [fn]
   (def ^:dynamic *indexes-fn* fn))
+  ;; (def ^:dynamic *indexes-fn* (memoize fn)))
+
+(s/fdef indexes
+        :args (s/cat :m ::select-index)
+        :ret  ::idx-info)
 
 (defn indexes
-  "Depending on the entity and other fields in `m`, return the indexes.
+  "Depending on the tenant and entity in `m`, return the indexes.
    Only non-nil values will be indexed."
-  ;; TODO: depends on (get-tenant)
   [m]
-  (if *indexes-fn* (*indexes-fn* m)
-      (assert false "Please set *indexes-fn* using set-*indexes-fn*")))
+  (let [m (select-keys m [:tenant :entity])
+        m2 (if (:tenant m)
+             m
+             (assoc m :tenant (get-tenant)))
+        res (if *indexes-fn*
+              (*indexes-fn* m2)
+              (assert false "Please set *indexes-fn* using set-*indexes-fn*"))]
+    ;; Caching is implemented by the user by wrapping the function inside `memoize`
+    res))
 
 
 (s/fdef select-index

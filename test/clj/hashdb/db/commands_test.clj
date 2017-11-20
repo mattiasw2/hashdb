@@ -74,7 +74,8 @@
              :i1 :long,   :i2 :long,   :i3 :long,   :i4 :long}]
     [raw (into #{} (map key raw))]))
 
-(set-*indexes-fn* test-indexes)
+;; memoize a good idea in production, might be messy in development
+(set-*indexes-fn* (memoize test-indexes))
 
 ;; ## ::short-keyword always  has between 1 and 4 chars!
 ;;
