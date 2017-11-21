@@ -70,14 +70,17 @@
   (s/keys :opt-un [::s1 ::s2 ::s3 ::s4
                    ::i1 ::i2 ::i3 ::i4]))
 
+(s/fdef test-indexes
+        :args (s/cat :m :hashdb.db.commands/select-index)
+        :ret  (s/map-of keyword? :hashdb.db.commands/idx-type))
+
 (defn test-indexes
   [m]
   (let [raw {:s1 :string, :s2 :string, :s3 :string, :s4 :string,
              :i1 :long,   :i2 :long,   :i3 :long,   :i4 :long}]
-    [raw (into #{} (map key raw))]))
+    raw))
 
-;; memoize a good idea in production, might be messy in development
-(set-*indexes-fn* (memoize test-indexes))
+(set-*indexes-fn* test-indexes)
 
 ;; ## ::short-keyword always  has between 1 and 4 chars!
 ;;
@@ -406,7 +409,7 @@
               (hashdb.db.commands/delete-by-id! (:id mA)))
         _ (is (nil? m10))
         m11 (with-tenant "two"
-              (is (thrown? Throwable (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))))
+              (is (thrown? Throwable (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB) :unknown))))
         m12 (with-tenant "twelfe"
               (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))
         _ (is (nil? m12))]))

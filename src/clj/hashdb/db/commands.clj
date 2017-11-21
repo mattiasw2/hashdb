@@ -13,6 +13,8 @@
    [clj-time.core :as t]
    [mw.std :refer :all]
    [qbits.tardis :as qbits])
+  ;; remove the warning that we define a function called get
+  (:refer-clojure :exclude [get])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
@@ -357,7 +359,8 @@
 ;; The list of all indexed keys, and their type.
 (s/def ::idx-info
   (s/tuple (s/map-of keyword? ::idx-type)
-           (s/coll-of keyword? :into #{})))
+           (s/coll-of keyword? :into #{})
+           (s/coll-of ::idx-type :into [])))
 
 
 ;; TODO: implement a function that returns this list.
@@ -375,11 +378,10 @@
 
 (defn set-*indexes-fn*
   "The function to call to get the indexes for a special {:tenant XX, :enity YY}.
-   TIP: you should be able to memoize the function, unless the indexes can change during
-   runtime."
+   Should return (s/map-of keyword? ::idx-type).
+   The result will be cached."
   [fn]
   (def ^:dynamic *indexes-fn* fn))
-  ;; (def ^:dynamic *indexes-fn* (memoize fn)))
 
 (s/fdef indexes
         :args (s/cat :m ::select-index)
@@ -395,9 +397,14 @@
              (assoc m :tenant (get-tenant)))
         res (if *indexes-fn*
               (*indexes-fn* m2)
-              (assert false "Please set *indexes-fn* using set-*indexes-fn*"))]
-    ;; Caching is implemented by the user by wrapping the function inside `memoize`
-    res))
+              (assert false "Please set *indexes-fn* using set-*indexes-fn*"))
+        keywords (into #{} (map key res))
+        used-types (sort (vec (into #{} (map second res))))]
+    ;; Todo: implement caching
+    ;; See https://github.com/clojure/core.cache
+    ;; especially the LIRS article which describes some typical LRU (least recently used)
+    ;; caching problems.
+    [res keywords used-types]))
 
 
 (s/fdef select-index
@@ -441,7 +448,7 @@
 (defn keep-difference-by-type
   "Only keep the changes keys that have indexes.
    Group these by type, e.g. :string :int..."
-  [changes [idx-types idx-keys] pred]
+  [changes [idx-types idx-keys _] pred]
   (if-not changes {}
           (let [changes-relevant (if pred
                                    (into {} (filter pred (select-keys changes idx-keys)))
@@ -558,8 +565,9 @@
 ;;
 ;; * latest
 ;; * history
-;; * string_index
-;; * int_index
+;; * indexes by sort order
+;;  * long_index
+;;  * string_index
 ;;
 ;; Algorithm:
 ;;
@@ -605,7 +613,7 @@
                                                   (fn [[k v]] (some? v)))
         changes-relevant (keep-difference-by-type changes idx-info
                                                   nil)]
-    (doseq [typ [:string :long]]
+    (doseq [typ [:long :string]]        ;sorted!
       (let [before0  (typ before-relevant)
             changes0 (typ changes-relevant)]
         (if (or before0 changes0)
@@ -614,18 +622,22 @@
             (apply-dbcommands-prevent-deadlock conn dbcommands)))))))
 
 
-
+;; nilable, so that callers can send in entity
 (s/fdef delete-indexes-without-data!
-        :args (s/cat :conn any? :id ::id)
+        :args (s/cat :conn any? :id ::id :entity (s/? (s/nilable ::entity)))
         :ret nil?)
 
 (defn delete-indexes-without-data!
-  "Delete all index entries for record `id`.
-   Can be inefficient, since we have to assume there are both
-   string and integer indexed keys."
-  [conn id]
-  (doseq [typ [:string :long]]
-    (apply-dbcommands-prevent-deadlock conn (update-indexes-one-type-delete! {} typ id))))
+  "Delete all index entries for record `id` with optional `entity`.
+   Unless you give the entity, it can be inefficient, since we
+   have to assume there are both string and integer indexed keys."
+  [conn id &[entity]]
+  (let [typs (if entity
+               (nth (indexes {:entity entity}) 2) ;used-types
+               [:long :string])]
+    (assert (= typs [:long :string]))
+    (doseq [typ typs]
+      (apply-dbcommands-prevent-deadlock conn (update-indexes-one-type-delete! {} typ id)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # Create: Insert map `m` into db.
@@ -912,15 +924,20 @@
 
 
 (s/fdef delete-by-id-with-minimum-history!
-        :args (s/cat :id ::id)
+        :args (s/cat :id ::id :entity (s/? ::entity))
         :ret nil?)
 
+
+;; todo: add entity as optional argument. if
+;; we know it, send it down to delete-indexes-without-data!
+;; which then can verify that we only delete indexes if they
+;; really exist.
 (defn delete-by-id-with-minimum-history!
-  "Delete the row `id`.
+  "Delete the row `id` with optional `entity`.
    The last history entry will not be optimal.
    The existing record will not be read before.
    We do not care if anyone has updated or deleted the row just before."
-  [id]
+  [id &[entity]]
   (sql/with-db-transaction [conn *db*]
     (let [tenant     (get-tenant)
           tenant-str (tenant->str tenant)
@@ -935,7 +952,7 @@
         :parent  2000000000,         :is_merge  0,
         :userid  nil,                :sessionid nil,
         :comment nil})
-      (delete-indexes-without-data! conn id)
+      (delete-indexes-without-data! conn id entity)
       nil)))
 
 
