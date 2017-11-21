@@ -12,6 +12,7 @@
    [orchestra.spec.test]
    [clj-time.core :as t]
    [mw.std :refer :all]
+   [clojure.core.cache :as cache]
    [qbits.tardis :as qbits])
   ;; remove the warning that we define a function called get
   (:refer-clojure :exclude [get])
@@ -351,6 +352,26 @@
           :opt-un [::is_merge ::userid ::sessionid ::comment]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Cache for indexes
+
+(def ^:private indexes-cache (atom nil))
+
+(defn ic-clear []
+  (reset! indexes-cache (cache/lru-cache-factory {} :threshold 100)))
+
+(ic-clear)
+
+(defn ic-lookup [te]
+  (cache/lookup @indexes-cache te))
+
+(defn ic-add [te indexes]
+  (swap! indexes-cache cache/miss
+         te indexes))
+
+;; (defn ic-drop [te]
+;;   (swap! indexes-cache cache/evict te))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # SPECs for indexes
 
 ;; Indexes can either be string or integer.
@@ -367,12 +388,12 @@
 ;; We could just look at the entity for indexes, and then `delete-indexes-without-data!`
 ;; could be efficiently implemented. Right now it looks into both int_index and string_index tables.
 ;; Most likely, I will not look into other fields than entity, but let us see.
+
+;; ## Enhancement: Allow uuids as ::entity
+;;
 ;; For example, for frm, what should be the entity? :frm or frm-id? The advantage using frm-id, is that
 ;; indexing will be better, the disadvantage is I only can have one "else", so uuid as entity for ins
 ;; will be assumed to be a frm.
-;;
-;; TODO: For now, it is hard-coded. Only works for test-cases
-
 
 (defonce ^:dynamic *indexes-fn* nil)
 
@@ -395,16 +416,18 @@
         m2 (if (:tenant m)
              m
              (assoc m :tenant (get-tenant)))
-        res (if *indexes-fn*
-              (*indexes-fn* m2)
-              (assert false "Please set *indexes-fn* using set-*indexes-fn*"))
-        keywords (into #{} (map key res))
-        used-types (sort (vec (into #{} (map second res))))]
-    ;; Todo: implement caching
-    ;; See https://github.com/clojure/core.cache
-    ;; especially the LIRS article which describes some typical LRU (least recently used)
-    ;; caching problems.
-    [res keywords used-types]))
+        cached (ic-lookup m2)]
+    (if cached
+      cached
+      (let [res (if *indexes-fn*
+                  (*indexes-fn* m2)
+                  (assert false "Please set *indexes-fn* using set-*indexes-fn*"))
+            keywords (into #{} (map key res))
+            used-types (sort (vec (into #{} (map second res))))
+            final [res keywords used-types]]
+        (ic-add m2 final)
+        final))))
+
 
 
 (s/fdef select-index

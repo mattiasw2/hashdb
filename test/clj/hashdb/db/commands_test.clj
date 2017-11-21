@@ -411,7 +411,7 @@
         m11 (with-tenant "two"
               (is (thrown? Throwable (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB) :unknown))))
         m12 (with-tenant "twelfe"
-              (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB)))
+              (hashdb.db.commands/delete-by-id-with-minimum-history! (:id mB) :unknown))
         _ (is (nil? m12))]))
 
 (deftest test-cannot-select-from-other-tennant
