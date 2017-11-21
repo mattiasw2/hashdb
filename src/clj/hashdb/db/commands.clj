@@ -384,11 +384,6 @@
            (s/coll-of ::idx-type :into [])))
 
 
-;; TODO: implement a function that returns this list.
-;; We could just look at the entity for indexes, and then `delete-indexes-without-data!`
-;; could be efficiently implemented. Right now it looks into both int_index and string_index tables.
-;; Most likely, I will not look into other fields than entity, but let us see.
-
 ;; ## Enhancement: Allow uuids as ::entity
 ;;
 ;; For example, for frm, what should be the entity? :frm or frm-id? The advantage using frm-id, is that
@@ -811,10 +806,6 @@
   []
   (select-all-nil-entity :unknown))
 
-;; TODO: We cannot verify that the query is valid if `indexes` needs `m` as
-;; argument. If we restrict it to `:tenant` and `:entity`, we can check that
-;; `:k` is indexed.
-;; We can also verify the type of the argument to `select-by` with the index-type
 
 (s/fdef select-by
         :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
@@ -823,10 +814,16 @@
 (defn select-by
   "Return all rows of type `entity` where `k` is exactly the string `search`."
   [entity k search]
-  (let [res ((select-index-by-value search cmd/select-by-string-index cmd/select-by-long-index)
-             {:tenant (tenant->str (get-tenant))
-              :entity (str-edn entity) :k (str-edn k)
-              :index_data (select-index-by-value search (str-index search) search)})]
+  (let [[idx _ _] (indexes {:entity entity})
+        typ       (idx k)
+        ;; verify that k is indexed
+        _         (assert typ (str "'" k "' is not indexed for entity '" entity "'"))
+        ;; and verify that correct type of index
+        _         (assert (select-index-by-value search (= :string typ) (= :long typ)) (str "'" search "' is wrong type for index '" k "'  for entity '" entity "'"))
+        res       ((select-index-by-value search cmd/select-by-string-index cmd/select-by-long-index)
+                   {:tenant     (tenant->str (get-tenant))
+                    :entity     (str-edn entity) :k (str-edn k)
+                    :index_data (select-index-by-value search (str-index search) search)})]
     (map extract-row res)))
 
 
@@ -836,13 +833,14 @@
 
 (defn select-by-global
   "Return all rows of type `entity` where `k` is exactly
-   the string `search` regardless of tenant."
+   the string `search` regardless of tenant.
+   We cannot verify that k is indexed for entity, since we do not know the tenant. "
   [entity k search]
   (assert (= :global (get-tenant-raw))
           (str "For global search, you need to set tenant to :global, not '"
                (get-tenant-raw) "'"))
   (let [res ((select-index-by-value search cmd/select-by-string-index-global cmd/select-by-long-index-global)
-             {:entity (str-edn entity) :k (str-edn k)
+             {:entity     (str-edn entity) :k (str-edn k)
               :index_data (select-index-by-value search (str-index search) search)})]
     (map extract-row res)))
 
@@ -950,11 +948,6 @@
         :args (s/cat :id ::id :entity (s/? ::entity))
         :ret nil?)
 
-
-;; todo: add entity as optional argument. if
-;; we know it, send it down to delete-indexes-without-data!
-;; which then can verify that we only delete indexes if they
-;; really exist.
 (defn delete-by-id-with-minimum-history!
   "Delete the row `id` with optional `entity`.
    The last history entry will not be optimal.

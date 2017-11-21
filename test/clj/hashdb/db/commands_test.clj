@@ -423,6 +423,9 @@
         m3 (with-tenant "three"
              (hashdb.db.commands/create! {:s1 "mats" :name "larsson"}))
         ms (with-tenant "two"
+             ;; make sure we detect the wrong type
+             (is (thrown? Throwable (hashdb.db.commands/select-by :unknown :s1 10101010101)))
+             (is (thrown? Throwable (hashdb.db.commands/select-by :unknown :i1 "mats")))
              (hashdb.db.commands/select-by :unknown :s1 "mats"))
         _  (is (= 2 (count ms)))
         ms2 (with-tenant "three"
