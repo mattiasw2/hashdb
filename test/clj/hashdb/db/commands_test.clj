@@ -12,6 +12,8 @@
    [mw.std :refer :all]
    [luminus-migrations.core :as migrations]
    [clojure.spec.test.alpha :as stest])
+  ;; remove the warning that we define a function called get
+  (:refer-clojure :exclude [get])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
