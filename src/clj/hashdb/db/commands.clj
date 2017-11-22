@@ -539,7 +539,7 @@
 ;; For delete, we can just delete all index entries at once
 ;; so actually unnecessary to see which exact keywords are indexed,
 ;; just which type of indexes there are. No point deleting int-indexes
-;; there are none.
+;; if there are none.
 (defn- update-indexes-one-type-delete!
   "Delete al index entries for record `id`."
   [changes typ id]
@@ -583,7 +583,7 @@
 ;;
 ;; * latest
 ;; * history
-;; * indexes by sort order
+;; * indexes by sort order, i.e.
 ;;  * long_index
 ;;  * string_index
 ;;
