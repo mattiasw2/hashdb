@@ -38,10 +38,6 @@ To create the tables, run
 
     lein run migrate
 
-To start a web server for the application, run:
-
-    lein run
-
 or if repl
 
     (user/start)
@@ -52,11 +48,28 @@ See
 
 https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test.clj
 
+### Basic terms
+
+ * In a multi-tenant system, the thread can only access data from a single tenant. (There is one exception: `select-by-global`.)
+ * Each map has a type called entity.
+ * Indexes are defined from tenant x entity to map with keywords -> :long or :string
+ * You need to define the indexes before you put in data for that entity, otherwise the index tables are not filled properly.
+
+### The most functions important are
+
+ * Define which top-level map keys should be indexes: `(set-*indexes-fn* <f>)`
+ * Start with single-tenant by calling `(single-tenant-mode)`
+ * Store maps into using `(create! m)
+ * Update a map on disk using `(update! m changes)` where changes are the top-level keys that should be updated.
+ * Load a map using id using `(get id)` and `(try-get id)`.
+ * Load many maps using `select-all` `select-by-entity`.
+ * Load many maps through database index using `select-by`.
+ * Delete maps using `(delete! m)`
+
 ## Ongoing development
 
- * Define your own indexes, currently keys :s1 :s2 :s3 :s4 are indexed
+ * Make a clojar
  * Add LIKE lookups for strings
- * Add integer indexes
 
 ### Open questions
 
