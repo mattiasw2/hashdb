@@ -299,10 +299,13 @@
 (def ^:dynamic src nil)
 (defn test-many-n
   [n]
-  (with-tenant :single
-    (let [d (generate-samples n)]
-      (def src d)
-      (test-many d))))
+  (timed
+   "Total"
+   (with-tenant :single
+     (let [d (generate-samples n)]
+       (def src d)
+       (test-many d))
+     nil)))
 
 ;; I cannot run this in multiple-thread, and inside check there is a pmap.
 ;; So I am testing check-fn instead.
@@ -316,29 +319,44 @@
 ;; when running (test-many-parallel :n 100 :par 10 :delay 2000)
 ;; and (test-many-parallel :n 100 :par 10 :delay 500)  on the 9th thread doing create!
 
+;; # Benchmark
+;;
+;; If you want to benchmark, and make sure we have the same data every time, do like this:
+;;
+;;     (def sam (generate-samples 100))
+;;     (test-many-parallel :n 10 :par 10 :delay 500 :samples sam)
+;;
+;; ## Conclusions
+;;
+;; * 5% slower with active specs
+;; * 100 write/update/delete operations per second
+
 (defn test-many-parallel
   "Test in parallel.
    If just one thread, the indexes will also be verified."
-  [& {:keys [n par delay]
+  [& {:keys [n par delay samples]
       :or {n 1000
            par 2
-           delay 2000}}]
-  (with-tenant :single
-    (let [samples (generate-samples n)]
-      (clear-database)
-      (->>
-       (range par)
-       (mapv (fn [idx]
-               (Thread/sleep delay)
-               ;; it seems as if a future call also get the active thread-bindings.
-               ;; in any normal language, I would have to have the with-tenant part inside the future
-               ;; the with-tenant is only needed if we have several tenants, otherwise it will work
-               (if (= par 1)
-                 (future (test-many-continue samples (= par 1)))
-                 (with-tenant (str idx)
-                   (future (test-many-continue samples (= par 1)))))))
-       (mapv deref))
-      (println "Finished"))))
+           delay 2000
+           samples (generate-samples n)}}]
+  (timed
+   "Total"
+   (with-tenant :single
+     (let []
+       (clear-database)
+       (->>
+        (range par)
+        (mapv (fn [idx]
+                (Thread/sleep delay)
+                ;; it seems as if a future call also get the active thread-bindings.
+                ;; in any normal language, I would have to have the with-tenant part inside the future
+                ;; the with-tenant is only needed if we have several tenants, otherwise it will work
+                (if (= par 1)
+                  (future (test-many-continue samples (= par 1)))
+                  (with-tenant (str idx)
+                    (future (test-many-continue samples (= par 1)))))))
+        (mapv deref)))
+     nil)))
 
 
 
