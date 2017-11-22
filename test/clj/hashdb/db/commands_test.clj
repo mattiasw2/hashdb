@@ -11,12 +11,29 @@
    [clojure.spec.gen.alpha :as gen]
    [mw.std :refer :all]
    [luminus-migrations.core :as migrations]
-   [clojure.spec.test.alpha :as stest])
+   [clojure.spec.test.alpha :as stest]
+   [mount.core :as mount])
   ;; remove the warning that we define a function called get
   (:refer-clojure :exclude [get])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
+
+(defn clear-database
+  "Clear the database by reconstructing it from scratch."
+  []
+  (migrations/migrate ["reset"] (select-keys env [:database-url])))
+
+(use-fixtures
+  :once
+  (fn [f]
+    (mount/start
+      #'hashdb.config/env
+      #'hashdb.db.core/*db*)
+    ;; (migrations/migrate ["migrate"] (select-keys env [:database-url]))
+    (clear-database)
+    (f)))
+
 
 ;; # Setup & Generation of test data
 
@@ -115,10 +132,6 @@
 ;;
 ;; Both indexed and non-indexed keys are part of the operation
 
-(defn clear-database
-  "Clear the database by reconstructing it from scratch."
-  []
-  (migrations/migrate ["reset"] (select-keys env [:database-url])))
 
 
 (defn random-string
