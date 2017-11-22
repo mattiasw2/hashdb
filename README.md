@@ -65,6 +65,7 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
  * Load many maps using `select-all` `select-by-entity`.
  * Load many maps through database index using `select-by`.
  * Delete maps using `(delete! m)`
+ * You find the history (or audit log) of a map using `(history id)`
 
 ## Ongoing development
 
