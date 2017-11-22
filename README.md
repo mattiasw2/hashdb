@@ -71,6 +71,10 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
  * Make a clojar
  * Add LIKE lookups for strings
 
+## Performance
+
+About 100 update or write operations per second on my 2015 Thinkpad X260.
+
 ### Open questions
 
  * Decide if we should only handle the first index by the database, and the rest by filtering inside Clojure.
@@ -82,7 +86,7 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
 
 ## Project template
 
-Generated using Luminus version "2.9.11.91" incl a webserver. That part isn't needed, and maybe I will remove the non-db parts later.
+Generated using Luminus version "2.9.11.91" where a lot has been removed.
 
 ## License
 
