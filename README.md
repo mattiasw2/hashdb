@@ -97,4 +97,6 @@ Generated using Luminus version "2.9.11.91" where a lot has been removed.
 
 ## License
 
+Distributed under the Eclipse Public License version 1.0, just like Clojure.
+
 Copyright © 2017 Mattias W
