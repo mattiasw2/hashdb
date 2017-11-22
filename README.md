@@ -59,7 +59,7 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
 
  * Define which top-level map keys should be indexes: `(set-*indexes-fn* <f>)`
  * Start with single-tenant by calling `(single-tenant-mode)`
- * Store maps into using `(create! m)
+ * Store maps into using `(create! m)`
  * Update a map on disk using `(update! m changes)` where changes are the top-level keys that should be updated.
  * Load a map using id using `(get id)` and `(try-get id)`.
  * Load many maps using `select-all` `select-by-entity`.
