@@ -27,6 +27,7 @@
 ;; should never see data from another tennant.
 ;; Normally, you should never look into the database without
 ;; knowing the tenant. The only exceptions are
+;;
 ;;  * You do not know the tenant yet, typically the login page.
 ;;  * It is a single tenant system, then set tennant to "*single*"
 ;;
@@ -119,7 +120,7 @@
         :ret  boolean?)
 
 (defn verify-tenant-write
-  "If `*tenant*` is :global, the writing is not allowed.
+  "If `*tenant*` is :global, writing is not allowed.
   `tenant` and `*tenant*` must be equal."
   [tenant]
   (if (or (nil? *tenant*)(= :global *tenant*)(nil? tenant))
@@ -393,8 +394,8 @@
 (defonce ^:dynamic *indexes-fn* nil)
 
 (defn set-*indexes-fn*
-  "The function to call to get the indexes for a special {:tenant XX, :enity YY}.
-   Should return (s/map-of keyword? ::idx-type).
+  "The function to call to get the indexes for a special `{:tenant XX, :enity YY}`.
+   Should return `(s/map-of keyword? ::idx-type)`.
    The result will be cached."
   [fn]
   (def ^:dynamic *indexes-fn* fn))
@@ -429,7 +430,7 @@
         :args (s/cat :typ ::idx-type :s any? :k any?)
         :ret  any?)
 
-;; optimization: could be turned into a macro, so that not both args are evaluated.
+;; Optimization: could be turned into a macro, so that not both args are evaluated.
 (defn select-index
   "Depending on the typ, return the string `s` or long version `k`."
   [typ s k]
@@ -456,8 +457,7 @@
 ;;  * exists in before, nil in after => delete
 ;;  * exists in before, exists in after => update
 ;;
-;; Optimization: if I want to use multi-insert, it is best if we loop per type,
-;; i.e. first for :string, then for :int
+
 
 (s/fdef keep-difference-by-type
         :args (s/cat :changes ::changes :idx-info ::idx-info :pred any?)
@@ -589,7 +589,7 @@
 ;;
 ;; Algorithm:
 ;;
-;; * The global order of latest history string_index and int_index is handle by ordering in the code written
+;; * The global order of latest history string-index and int-index is handle by ordering in the code written
 ;; * For the (string|int)_index table:
 ;;  * I collect all operations onto this level,
 ;;  * Sort them, and then run them.
