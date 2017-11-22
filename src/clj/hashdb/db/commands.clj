@@ -1,19 +1,14 @@
 (ns hashdb.db.commands
   (:require
-   [clj-time.jdbc]
-   [clojure.java.jdbc :as jdbc]
    [clojure.java.jdbc :as sql]
    [clojure.spec.alpha :as s]
    [hashdb.config :refer [env]]
    [hashdb.db.core :refer [*db*]]
    [hashdb.db.core :as cmd]
-   [clojure.spec.gen.alpha :as gen]
-   [clojure.spec.test.alpha :as stest2]
    [orchestra.spec.test]
-   [clj-time.core :as t]
    [mw.std :refer :all]
-   [clojure.core.cache :as cache]
-   [qbits.tardis :as qbits])
+   [clj-time.core :as t]
+   [clojure.core.cache :as cache])
   ;; remove the warning that we define a function called get
   (:refer-clojure :exclude [get])
   (:import [java.sql

@@ -2,10 +2,8 @@
   (:require
    [clojure.test :refer :all]
    [hashdb.db.commands :refer :all]
-   [clj-time.jdbc]
-   [clojure.java.jdbc :as jdbc]
-   [clojure.java.jdbc :as sql]
    [hashdb.config :refer [env]]
+   [clj-time.jdbc]
    [hashdb.db.core :as cmd]
    [clojure.spec.alpha :as s]
    [clojure.spec.gen.alpha :as gen]
