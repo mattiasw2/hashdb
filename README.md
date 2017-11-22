@@ -85,6 +85,12 @@ About 100 update or write operations per second on my 2015 Thinkpad X260.
 
  * Using sequential uuids, https://github.com/danlentz/clj-uuid#sequential-temporal-namespace
 
+## clojure.spec (requires Clojure 1.9RC1)
+
+All important functions and data have SPECs. They are always on, cost about 5% in performance. Not only the call is checked, the return value too, by using the [Orchestra patch][2].
+
+[2]: https://github.com/jeaye/orchestra
+
 ## Project template
 
 Generated using Luminus version "2.9.11.91" where a lot has been removed.

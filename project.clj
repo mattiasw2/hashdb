@@ -16,7 +16,7 @@
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/tools.logging "0.4.0"]
                  ;; make instrumentation check :ret and :fn too
-                 [orchestra "2017.08.13"]]
+                 [orchestra "2017.11.12-1"]]
 
   :min-lein-version "2.0.0"
 
