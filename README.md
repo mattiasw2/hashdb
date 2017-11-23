@@ -6,18 +6,26 @@ Originally, the database was planned to work like Cassandra, i.e. the latest val
 
 However, it got too complicated, and I do not need to for my scenarios.
 
-# mysql
 
-Originally, I did optimistic locking using timestamp and then I want everything to be UTC. To make sure mysql set to utc
+# Design goals
 
-    my.ini
+ * Store clojure core datastructures: maps, lists, sets and primitive types.
+ * Document oriented, it should be easy to make conservative extensions of the data. Not a lot of small entities like in a relational database schema. A typical system maybe as 10-30 entities.
+ * We should not be able to have to deserialize to find stuff, i.e. standard DB-indexes needs to be supported (on pre-declared keywords).
+ * Should use cheap relational databases like mySQL, mariaDB or postgreslq.
+ * Hostable on Amazon or Google, where they manage backups, high-availability etc.
+ * No database schema changes after initial deploy. Messy in production.
+ * Should manage database size up to a few million entities/documents.
+ * Number of concurrent users is at most a few hundred users.
+ * Crash-proof, i.e. should use database transactions to make sure internal structure is ok, or be able to repair itself.
+ * Optimistic locking.
+ * History of changes.
+ * Support multiple tenants, and make it hard to write code that accesses data from more than one tennant. Maybe, we should even be able to use row-level priviligies [mariaDB][3] [postgresql][4] in the future.
 
-    [mysqld]
-    basedir=C:\\tools\\mysql\\current
-    datadir=C:\\ProgramData\\MySQL\\data
-    default-time-zone='+00:00'
+[3]: https://mariadb.com/resources/blog/protect-your-data-row-level-security-mariadb-100
+[4]: https://www.postgresql.org/docs/9.5/static/ddl-rowsecurity.html
 
-This actually didn't help, so I used a version integer for optimistic locking instead. But it is nice to see the same time in REPL and in SQL studio.
+
 
 
 ## Prerequisites
@@ -66,6 +74,21 @@ https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test
  * Load many maps through database index using `select-by`.
  * Delete maps using `(delete! m)`
  * You find the history (or audit log) of a map using `(history id)`
+
+
+# mySQL specifics
+
+Originally, I did optimistic locking using timestamp and then I want everything to be UTC. To make sure mysql set to utc
+
+    my.ini
+
+    [mysqld]
+    basedir=C:\\tools\\mysql\\current
+    datadir=C:\\ProgramData\\MySQL\\data
+    default-time-zone='+00:00'
+
+This actually didn't help, so I used a version integer for optimistic locking instead. But it is nice to see the same time in REPL and in SQL studio.
+
 
 ## Ongoing development
 
