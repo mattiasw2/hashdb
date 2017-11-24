@@ -20,7 +20,7 @@ However, it got too complicated, and I do not need to for my scenarios.
  * Crash-proof, i.e. should use database transactions to make sure internal structure is ok, or be able to repair itself.
  * Optimistic locking.
  * History of changes.
- * Support multiple tenants, and make it hard to write code that accesses data from more than one tennant. Maybe, we should even be able to use row-level priviligies [mariaDB][3] [postgresql][4] in the future.
+ * Support multiple tenants, and make it hard to write code that accesses data from more than one tenant. Maybe, we should even be able to use row-level priviligies for [mariaDB][3] and [postgresql][4] in the future.
 
 [3]: https://mariadb.com/resources/blog/protect-your-data-row-level-security-mariadb-100
 [4]: https://www.postgresql.org/docs/9.5/static/ddl-rowsecurity.html

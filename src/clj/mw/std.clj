@@ -2,8 +2,6 @@
   (:require
    [schema.core :as sc]
    [clojure.spec.alpha :as s]
-;;   [taoensso.truss :as truss :refer (have have! have?)]
-;;   [taoensso.timbre :as timbre]
    [clojure.pprint :as pp]
    [clojure.tools.logging :as log]))
 
