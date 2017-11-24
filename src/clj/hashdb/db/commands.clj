@@ -16,6 +16,11 @@
             PreparedStatement]))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; The part of a string which is stored in the index file.
+(def max-string-index-count 100)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; # Tenant
 ;;
 ;; The database is shared between different tenants. A tenant
@@ -207,7 +212,10 @@
 
 
 ;; But for str-index, we do not want quotes around and similar.
-(def str-index str)
+;;(def str-index str)
+(defn str-index
+  [s]
+  (substring+ (str s) 0 max-string-index-count))
 
 
 ;; Mattias premature performance optimization :-)
@@ -818,8 +826,14 @@
         res       ((select-index-by-value search cmd/select-by-string-index cmd/select-by-long-index)
                    {:tenant     (tenant->str (get-tenant))
                     :entity     (str-edn entity) :k (str-edn k)
-                    :index_data (select-index-by-value search (str-index search) search)})]
-    (map extract-row res)))
+                    :index_data (select-index-by-value search (str-index search) search)})
+        ;; since I only store the first 100 chars of an indexed column,
+        ;; I need to double-check the result
+        filterp   (select-index-by-value
+                   search
+                   (fn [m] (= (k m) search))
+                   (fn [_] true))]
+    (filter filterp (map extract-row res))))
 
 
 (s/fdef select-by-global
@@ -836,8 +850,15 @@
                (get-tenant-raw) "'"))
   (let [res ((select-index-by-value search cmd/select-by-string-index-global cmd/select-by-long-index-global)
              {:entity     (str-edn entity) :k (str-edn k)
-              :index_data (select-index-by-value search (str-index search) search)})]
-    (map extract-row res)))
+              :index_data (select-index-by-value search (str-index search) search)})
+        ;; since I only store the first 100 chars of an indexed column,
+        ;; I need to double-check the result
+        filterp   (select-index-by-value
+                   search
+                   (fn [m] (= (k m) search))
+                   (fn [_] true))]
+    (filter filterp (map extract-row res))))
+
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -1085,8 +1106,11 @@
                                idxs))]
     (if m
       (let [idx-info    (indexes m)
-            ;; filter nil values, since these do not have an index entry
-            idx-values  (into {} (filter (fn [[k v]] (some? v))(select-keys m (second idx-info))))
+            idx-values  (into {}
+                              ;; cut the string part, since we only store the first 100 chars
+                              (map (fn [[k v]] [k (if (string? v)(substring+ v 0 max-string-index-count) v)])
+                                   ;; filter nil values, since these do not have an index entry
+                                   (filter (fn [[k v]] (some? v))(select-keys m (second idx-info)))))
             diff        (keep-difference-by-type m idx-info nil)]
         (and (or (zero? (count idxs))
                  (= (:entity m)

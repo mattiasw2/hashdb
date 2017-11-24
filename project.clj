@@ -16,7 +16,10 @@
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/tools.logging "0.4.0"]
                  ;; make instrumentation check :ret and :fn too
-                 [orchestra "2017.11.12-1"]]
+                 [orchestra "2017.11.12-1"]
+
+                 ;; needed for (hashdb.db.commands-test/test-many-n 10)
+                 [org.clojure/test.check "0.10.0-alpha2"]]
 
   ;; this is not enough, still get
   ;; Failed to deploy artifacts/metadata: No connector available to access repository clojars

@@ -10,12 +10,26 @@
    [mw.std :refer :all]
    [luminus-migrations.core :as migrations]
    [clojure.spec.test.alpha :as stest]
-   [mount.core :as mount])
+   [mount.core :as mount]
+   ;; needed for (hashdb.db.commands-test/test-many-n 10) to run, compilation succeeds
+   ;; [org.clojure/test.check "0.10.0-alpha2"])
+   [clojure.test.check :as tc])
+
   ;; remove the warning that we define a function called get
   (:refer-clojure :exclude [get])
   (:import [java.sql
             BatchUpdateException
             PreparedStatement]))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; # Issues
+
+;; hashdb.db.commands-test> (test-many-parallel :n 1000 :par 10 :delay 500)
+;; "Timed: exercise mapv: 5596.227247 msecs"
+;; MysqlDataTruncation Data truncation: Data too long for column 'index_data' at row 1  com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException (SQLExceptionsMapping.java:97)
+
+
+
 
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
@@ -417,27 +431,30 @@
 
 (deftest test-cannot-select-from-other-tennant
   (clear-database)
-  (let [m (with-tenant "two"
-            (hashdb.db.commands/create! {:s1 "mats" :name "bergström"}))
+  (let [very-long-string (clojure.string/join (repeat 100 "mats"))
+        m (with-tenant "two"
+            (let [mm (hashdb.db.commands/create! {:s1 very-long-string :name "bergström"})]
+              (verify-stored-data (:id mm))
+              mm))
         m2 (with-tenant "two"
-             (hashdb.db.commands/create! {:s1 "mats" :name "johansson"}))
+             (hashdb.db.commands/create! {:s1 very-long-string :name "johansson"}))
         m3 (with-tenant "three"
-             (hashdb.db.commands/create! {:s1 "mats" :name "larsson"}))
+             (hashdb.db.commands/create! {:s1 very-long-string :name "larsson"}))
         ms (with-tenant "two"
              ;; make sure we detect the wrong type
              (is (thrown? Throwable (hashdb.db.commands/select-by :unknown :s1 10101010101)))
-             (is (thrown? Throwable (hashdb.db.commands/select-by :unknown :i1 "mats")))
-             (hashdb.db.commands/select-by :unknown :s1 "mats"))
+             (is (thrown? Throwable (hashdb.db.commands/select-by :unknown :i1 very-long-string)))
+             (hashdb.db.commands/select-by :unknown :s1 very-long-string))
         _  (is (= 2 (count ms)))
         ms2 (with-tenant "three"
-              (hashdb.db.commands/select-by :unknown :s1 "mats"))
+              (hashdb.db.commands/select-by :unknown :s1 very-long-string))
         _  (is (= 1 (count ms2)))
         ms3 (with-tenant :global
-              (hashdb.db.commands/select-by-global :unknown :s1 "mats"))
+              (hashdb.db.commands/select-by-global :unknown :s1 very-long-string))
         _  (is (= 3 (count ms3)))
         ms4 (with-tenant "four"
               (is (thrown? Throwable    ;Exception not enough, since assert
-                           (hashdb.db.commands/select-by-global :unknown :s1 "mats"))))]))
+                           (hashdb.db.commands/select-by-global :unknown :s1 very-long-string))))]))
 
 
 (deftest test-all-commands-without-indexes
