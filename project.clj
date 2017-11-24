@@ -18,6 +18,12 @@
                  ;; make instrumentation check :ret and :fn too
                  [orchestra "2017.11.12-1"]]
 
+  ;; this is not enough, still get
+  ;; Failed to deploy artifacts/metadata: No connector available to access repository clojars
+  ;; Also tried with export LEIN_SNAPSHOTS_IN_RELEASE=y
+  ;; since some part seems to include a SNAPSHOT
+  :deploy-repositories [["clojars" {:url "[https://clojars.org/mattiasw/](https://clojars.org/mattiasw/)" :sign-releases false}]]
+
   :min-lein-version "2.0.0"
 
   :jvm-opts ["-server" "-Dconf=.lein-env"]
