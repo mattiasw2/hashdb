@@ -16,3 +16,10 @@
 
 ;; How to create migration files from repl
 ;; (luminus-migrations.core/create "create-string-index" {})
+
+
+(defn start []
+  (mount/start))
+
+(defn stop []
+  (mount/stop))

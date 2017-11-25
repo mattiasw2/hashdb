@@ -18,6 +18,10 @@
                  ;; make instrumentation check :ret and :fn too
                  [orchestra "2017.11.12-1"]
 
+                 ;; (mount/start) needs this in dev mode
+                 [ch.qos.logback/logback-classic "1.1.8"]
+                 [ch.qos.logback/logback-core "1.1.8"]
+
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
 
