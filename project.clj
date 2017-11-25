@@ -3,14 +3,15 @@
   :description "HASHDB: A simple way of storing clojure maps into mySQL."
   :url "https://github.com/mattiasw2/hashdb"
 
-  :dependencies [[clj-time "0.14.0"]
-                 [conman "0.6.9"]
+  :dependencies [[clj-time "0.14.2"]
+                 [conman "0.7.4"]
                  [cprop "0.1.11"]
-                 [luminus-migrations "0.4.2"]
+                 [luminus-migrations "0.4.3"]
                  [mount "0.1.11"]
                  [org.clojure/core.cache "0.6.5"]
-                 ;; cannot be upgraded to 8.0.8, since it doesn't exist
-                 [mysql/mysql-connector-java "6.0.5"]
+                 ;; lein ancient doesn't know I have to add "-dmr" to the version
+                 [mysql/mysql-connector-java "8.0.8-dmr"]
+                 ;; [mysql/mysql-connector-java "6.0.6"]
                  [org.clojure/clojure "1.9.0-RC1"]
                  [org.clojure/java.jdbc "0.7.3"]
                  [org.clojure/tools.cli "0.3.5"]
@@ -19,8 +20,8 @@
                  [orchestra "2017.11.12-1"]
 
                  ;; (mount/start) needs this in dev mode
-                 [ch.qos.logback/logback-classic "1.1.8"]
-                 [ch.qos.logback/logback-core "1.1.8"]
+                 [ch.qos.logback/logback-classic "1.2.3"]
+                 [ch.qos.logback/logback-core "1.2.3"]
 
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
