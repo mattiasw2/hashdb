@@ -7,7 +7,7 @@
    [hashdb.db.core :as cmd]
    [clojure.spec.alpha :as s]
    [clojure.spec.gen.alpha :as gen]
-   [mw.std :refer :all]
+   [hashdb.std :refer :all]
    [luminus-migrations.core :as migrations]
    [clojure.spec.test.alpha :as stest]
    [mount.core :as mount]

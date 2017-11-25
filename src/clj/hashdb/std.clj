@@ -1,4 +1,4 @@
-(ns mw.std
+(ns hashdb.std
   (:require
    [schema.core :as sc]
    [clojure.spec.alpha :as s]

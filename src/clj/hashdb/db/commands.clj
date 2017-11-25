@@ -6,7 +6,7 @@
    [hashdb.db.core :refer [*db*]]
    [hashdb.db.core :as cmd]
    [orchestra.spec.test]
-   [mw.std :refer :all]
+   [hashdb.std :refer :all]
    [clj-time.core :as t]
    [clojure.core.cache :as cache])
   ;; remove the warning that we define a function called get
