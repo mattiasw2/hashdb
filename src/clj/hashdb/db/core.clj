@@ -14,4 +14,6 @@
            :start (conman/connect! {:jdbc-url (env :database-url)})
            :stop (conman/disconnect! *db*))
 
-(conman/bind-connection *db* "sql/queries.sql")
+;; do not use the default name queries.sql if there are
+;; multiple projects involved.
+(conman/bind-connection *db* "sql/hashdb.sql")

@@ -1,4 +1,4 @@
-(defproject org.clojars.mattiasw/hashdb "0.1.2"
+(defproject org.clojars.mattiasw/hashdb "0.1.3"
 
   :description "HASHDB: A simple way of storing clojure maps into mySQL."
   :url "https://github.com/mattiasw2/hashdb"

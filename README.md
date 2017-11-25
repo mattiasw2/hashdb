@@ -52,7 +52,30 @@ or if repl
 
 ## Samples
 
-See
+A quick demo. We run in single tenant mode, we use no indexes, so the indexes-fn always return the empty map. We save a map, and we load it by id.
+
+```
+user> (require '[hashdb.db.core :refer [*db*]])
+nil
+user> (mount/start)
+....
+user> (require '[hashdb.db.commands :as hashdb])
+nil
+user> (luminus-migrations.core/migrate ["migrate"] (select-keys hashdb.config/env [:database-url]))
+....
+nil
+user> (hashdb.db.commands/single-tenant-mode)
+#'hashdb.db.commands/*tenant*
+user> (hashdb.db.commands/set-*indexes-fn* (fn [_] {}))
+#'hashdb.db.commands/*indexes-fn*
+user> (hashdb.db.commands/create! {:m 30})
+{:m 30, :id "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3", :tenant :single, :updated #inst "2017-11-25T12:25:29.642-00:00", :version 1, :entity :unknown}
+user> (hashdb.db.commands/get "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3")
+{:m 30, :id "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3", :tenant :single, :updated #inst "2017-11-25T12:25:29.642-00:00", :version 1, :entity :unknown}
+user>
+```
+
+For more operations see
 
 https://github.com/mattiasw2/hashdb/blob/master/test/clj/hashdb/db/commands_test.clj
 
