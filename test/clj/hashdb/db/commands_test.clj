@@ -29,16 +29,6 @@
 ;; MysqlDataTruncation Data truncation: Data too long for column 'index_data' at row 1  com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException (SQLExceptionsMapping.java:97)
 
 
-(defn get-config
-  []
-  (into {:migration-dir "hashdb_migrations"}
-        (select-keys env [:database-url])))
-
-
-(defn clear-database
-  "Clear the database by reconstructing it from scratch."
-  []
-  (migrations/migrate ["reset"] (get-config)))
 
 (use-fixtures
   :once
@@ -47,7 +37,7 @@
       #'hashdb.config/env
       #'hashdb.db.core/*db*)
     ;; (migrations/migrate ["migrate"] (select-keys env [:database-url]))
-    (clear-database)
+    (clear-database env)
     (f)))
 
 
@@ -58,6 +48,17 @@
 
 (s/def ::large-map
   (s/and map? #(> (count %) 200)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; todo: how to generate datetime in the future
+
+;; (s/def ::datetime (dev-with-gen
+;;                    #(or
+;;                      ;; mysql select returns joda-time
+;;                      (instance? org.joda.time.DateTime %)
+;;                      (instance? java.util.Date %))
+;;                    #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
+
 
 ;; ## ::data is the data stored in the hashdb
 ;;
@@ -290,7 +291,7 @@
 (defn test-many
   "Test 1 thread."
   [samples]
-  (clear-database)
+  (clear-database env)
   (test-many-continue samples true))
 
 (def ^:dynamic src nil)
@@ -348,7 +349,7 @@
    "Total"
    (with-tenant :single
      (let []
-       (clear-database)
+       (clear-database env)
        (->>
         (range par)
         (mapv (fn [idx]
@@ -396,7 +397,7 @@
 ;; # Fast unit tests
 
 (deftest test-cannot-get-from-other-tennant
-  (clear-database)
+  (clear-database env)
   (let [m (with-tenant "one"
             (hashdb.db.commands/create! {:bergström "mats"}))
         mA (with-tenant "eleven"
@@ -434,7 +435,7 @@
 
 
 (deftest test-cannot-select-from-other-tennant
-  (clear-database)
+  (clear-database env)
   (let [very-long-string (clojure.string/join (repeat 100 "mats"))
         m (with-tenant "two"
             (let [mm (hashdb.db.commands/create! {:s1 very-long-string :name "bergström"})]
@@ -462,7 +463,7 @@
 
 
 (deftest test-all-commands-without-indexes
-  (clear-database)
+  (clear-database env)
   (with-tenant :single
     (let [m1  (hashdb.db.commands/create! {:då "foo"})
           id1 (:id m1)
@@ -558,7 +559,7 @@
 
 
 (deftest test-all-commands-with-long-indexes-small
-  (clear-database)
+  (clear-database env)
   (with-tenant :single
     (let [m3  (hashdb.db.commands/create! {:i1 567})
           id3 (:id m3)]

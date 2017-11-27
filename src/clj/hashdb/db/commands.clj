@@ -2,13 +2,13 @@
   (:require
    [clojure.java.jdbc :as sql]
    [clojure.spec.alpha :as s]
-   [hashdb.config :refer [env]]
    [hashdb.db.core :refer [*db*]]
    [hashdb.db.core :as cmd]
    [orchestra.spec.test]
    [hashdb.std :refer :all]
    [clj-time.core :as t]
-   [clojure.core.cache :as cache])
+   [clojure.core.cache :as cache]
+   [luminus-migrations.core :as migrations])
   ;; remove the warning that we define a function called get
   (:refer-clojure :exclude [get])
   (:import [java.sql
@@ -254,26 +254,6 @@
      (when arg1# (~f arg1#))))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; # Some SPEC-helpers
-
-;; defn since s/with-gen is a function function
-(defn dev-with-gen
-  "Only generator in dev code."
-  [spec gen-fn]
-  (if (:dev env)
-    (s/with-gen spec gen-fn)
-    spec))
-
-;; defmacro, since s/or is a macro
-(defmacro dev-spec-or
-  "In dev (dev-spec-or :a a :b b) same as (s/or :a a :b b), but in
-   prod only a."
-  [k1 pred1 k2 pred2]
-  (if (:dev env)
-    `(s/or ~k1 ~pred1 ~k2 ~pred2)
-    pred1))
-
 ;; ## Tip: s/form can be used to interpret SPECs
 ;;     (s/form ::indexed-data)
 ;;     =>
@@ -288,14 +268,12 @@
 ;; # SPECs for api and storage
 ;;
 
+(s/def ::datetime
+  #(or
+    ;; mysql select returns joda-time
+    (instance? org.joda.time.DateTime %)
+    (instance? java.util.Date %)))
 
-
-(s/def ::datetime (dev-with-gen
-                   #(or
-                     ;; mysql select returns joda-time
-                     (instance? org.joda.time.DateTime %)
-                     (instance? java.util.Date %))
-                   #(s/gen #{#inst "2000-01-01T00:00:00.000-00:00"})))
 
 (s/def ::id ::uuid-str)
 (s/def ::entity-str (s/and string? #(<= (count %) 36)))
@@ -1136,6 +1114,26 @@
   (let [ids (map :id (cmd/select-all-latest))]
     (verify-these ids)))
 
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; some helpers for setting up and create tables
+
+(defn get-config
+  [env]
+  (into {:migration-dir "hashdb_migrations"}
+        (select-keys env [:database-url])))
+
+
+(defn clear-database
+  "Clear the database by reconstructing it from scratch."
+  [env]
+  (migrations/migrate ["reset"] (get-config env)))
+
+
+(defn create-database-tables
+  "Create all necessary tables in the database."
+  [env]
+  (migrations/migrate ["migrate"] (get-config env)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

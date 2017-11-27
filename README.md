@@ -61,16 +61,16 @@ user> (mount/start)
 ....
 user> (require '[hashdb.db.commands :as hashdb])
 nil
-user> (luminus-migrations.core/migrate ["migrate"] (select-keys hashdb.config/env [:database-url]))
+user> (hashdb/create-database-tables submitstore.config/env) ;; where env is a map at least containing the :database-url
 ....
 nil
-user> (hashdb.db.commands/single-tenant-mode)
+user> (hashdb/single-tenant-mode)
 #'hashdb.db.commands/*tenant*
-user> (hashdb.db.commands/set-*indexes-fn* (fn [_] {}))
+user> (hashdb/set-*indexes-fn* (fn [_] {}))
 #'hashdb.db.commands/*indexes-fn*
-user> (hashdb.db.commands/create! {:m 30})
+user> (hashdb/create! {:m 30})
 {:m 30, :id "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3", :tenant :single, :updated #inst "2017-11-25T12:25:29.642-00:00", :version 1, :entity :unknown}
-user> (hashdb.db.commands/get "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3")
+user> (hashdb/get "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3")
 {:m 30, :id "ddc2aff5-9867-48ab-9d80-3aa1b2a18fc3", :tenant :single, :updated #inst "2017-11-25T12:25:29.642-00:00", :version 1, :entity :unknown}
 user>
 ```
