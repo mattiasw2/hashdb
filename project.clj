@@ -31,6 +31,10 @@
                  [org.clojure/test.check "0.10.0-alpha2"]]
 
   ;; only use `lein deploy`, not `lein deploy clojars`
+  ;;
+  ;; Now it doesn't call gpg any more.
+  ;; Could not transfer artifact hashdb:hashdb:pom:0.1.4 from/to releases (https://clojars.org/mattiasw):
+  ;; Access denied to: https://clojars.org/mattiasw/hashdb/hashdb/0.1.4/hashdb-0.1.4.pom, ReasonPhrase: Forbidden.
   :deploy-repositories [["releases"  {:sign-releases false :url "https://clojars.org/mattiasw"}]
                         ["snapshots" {:sign-releases false :url "https://clojars.org/mattiasw"}]]
 
