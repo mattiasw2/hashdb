@@ -20,3 +20,4 @@ profiles.clj
 TAGS
 /docs
 *.cmd~
+/.idea

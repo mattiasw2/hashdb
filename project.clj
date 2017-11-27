@@ -1,4 +1,4 @@
-(defproject org.clojars.mattiasw/hashdb "0.1.3"
+(defproject org.clojars.mattiasw/hashdb "0.1.4-SNAPSHOT"
 
   :description "HASHDB: A simple way of storing clojure maps into mySQL."
   :url "https://github.com/mattiasw2/hashdb"
@@ -9,7 +9,7 @@
                  [luminus-migrations "0.4.3"]
                  [mount "0.1.11"]
                  [org.clojure/core.cache "0.6.5"]
-                 ;; lein ancient doesn't know I have to add "-dmr" to the version
+                 ;; lein ancient doesn't know I have to add "-dmr" to the verspion
                  [mysql/mysql-connector-java "8.0.8-dmr"]
                  ;; [mysql/mysql-connector-java "6.0.6"]
                  [org.clojure/clojure "1.9.0-RC1"]
@@ -22,6 +22,10 @@
                  ;; (mount/start) needs this in dev mode
                  [ch.qos.logback/logback-classic "1.2.3"]
                  [ch.qos.logback/logback-core "1.2.3"]
+
+                 ;; for Intellij and Cursive
+                 [org.clojure/tools.nrepl "0.2.12"]
+                 [clojure-complete "0.2.4"]
 
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
