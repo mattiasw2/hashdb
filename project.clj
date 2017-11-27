@@ -26,11 +26,8 @@
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
 
-  ;; this is not enough, still get
-  ;; Failed to deploy artifacts/metadata: No connector available to access repository clojars
-  ;; Also tried with export LEIN_SNAPSHOTS_IN_RELEASE=y
-  ;; since some part seems to include a SNAPSHOT
-  :deploy-repositories [["clojars" {:url "[https://clojars.org/mattiasw/](https://clojars.org/mattiasw/)" :sign-releases false}]]
+  :deploy-repositories [["releases"  {:sign-releases false :url "https://clojars.org/repo"}]
+                        ["snapshots" {:sign-releases false :url "https://clojars.org/repo"}]
 
   :min-lein-version "2.0.0"
 
