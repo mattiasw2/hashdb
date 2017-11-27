@@ -26,8 +26,14 @@
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
 
-  :deploy-repositories [["releases"  {:sign-releases false :url "https://clojars.org/repo"}]
-                        ["snapshots" {:sign-releases false :url "https://clojars.org/repo"}]
+  ;; only use `lein deploy`, not `lein deploy clojars`
+  :deploy-repositories [["releases"  {:sign-releases false :url "https://clojars.org/mattiasw"}]
+                        ["snapshots" {:sign-releases false :url "https://clojars.org/mattiasw"}]]
+
+  :license {:name "Eclipse Public License - v 1.0"
+            :url "http://www.eclipse.org/legal/epl-v10.html"
+            :distribution :repo
+            :comments "same as Clojure"}
 
   :min-lein-version "2.0.0"
 
