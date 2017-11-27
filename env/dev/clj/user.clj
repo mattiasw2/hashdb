@@ -8,11 +8,17 @@
             hashdb.core))
 
 
+(defn get-config
+  []
+  (into {:migration-dir "hashdb_migrations"}
+        (select-keys env [:database-url])))
+
+
 (defn migrate []
-  (migrations/migrate ["migrate"] (select-keys env [:database-url])))
+  (migrations/migrate ["migrate"] (get-config)))
 
 (defn rollback []
-  (migrations/migrate ["rollback"] (select-keys env [:database-url])))
+  (migrations/migrate ["rollback"] (get-config)))
 
 ;; How to create migration files from repl
 ;; (luminus-migrations.core/create "create-string-index" {})

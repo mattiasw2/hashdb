@@ -29,12 +29,16 @@
 ;; MysqlDataTruncation Data truncation: Data too long for column 'index_data' at row 1  com.mysql.cj.jdbc.exceptions.SQLExceptionsMapping.translateException (SQLExceptionsMapping.java:97)
 
 
+(defn get-config
+  []
+  (into {:migration-dir "hashdb_migrations"}
+        (select-keys env [:database-url])))
 
 
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
   []
-  (migrations/migrate ["reset"] (select-keys env [:database-url])))
+  (migrations/migrate ["reset"] (get-config)))
 
 (use-fixtures
   :once
