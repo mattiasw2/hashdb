@@ -35,8 +35,8 @@
   ;; Now it doesn't call gpg any more.
   ;; Could not transfer artifact hashdb:hashdb:pom:0.1.4 from/to releases (https://clojars.org/mattiasw):
   ;; Access denied to: https://clojars.org/mattiasw/hashdb/hashdb/0.1.4/hashdb-0.1.4.pom, ReasonPhrase: Forbidden.
-  :deploy-repositories [["releases"  {:sign-releases false :url "https://clojars.org/mattiasw"}]
-                        ["snapshots" {:sign-releases false :url "https://clojars.org/mattiasw"}]]
+  :deploy-repositories [["releases"  {:sign-releases false :url "https://clojars.org"}]
+                        ["snapshots" {:sign-releases false :url "https://clojars.org"}]]
 
   :license {:name "Eclipse Public License - v 1.0"
             :url "http://www.eclipse.org/legal/epl-v10.html"
