@@ -112,6 +112,17 @@ Originally, I did optimistic locking using timestamp and then I want everything 
 
 This actually didn't help, so I used a version integer for optimistic locking instead. But it is nice to see the same time in REPL and in SQL studio.
 
+## Create database and UTF-8
+
+Run this command
+
+    CREATE DATABASE hashdb_dev CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+Use `utf8mb4` and not `utf8`, see [How to support full Unicode in MySQL databases][5]
+
+[55]: https://mathiasbynens.be/notes/mysql-utf8mb4
+
+# Next steps
 
 ## Ongoing development
 
@@ -145,4 +156,4 @@ Generated using Luminus version "2.9.11.91" where a lot has been removed.
 
 Distributed under the Eclipse Public License version 1.0, just like Clojure.
 
-Copyright © 2017 Mattias W
+Copyright Â© 2017 Mattias W
