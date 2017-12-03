@@ -120,7 +120,7 @@ Run this command
 
 Use `utf8mb4` and not `utf8`, see [How to support full Unicode in MySQL databases][5]
 
-[55]: https://mathiasbynens.be/notes/mysql-utf8mb4
+[5]: https://mathiasbynens.be/notes/mysql-utf8mb4
 
 # Next steps
 
