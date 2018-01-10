@@ -4,16 +4,16 @@
   :url "https://github.com/mattiasw2/hashdb"
 
   :dependencies [[clj-time "0.14.2"]
-                 [conman "0.7.4"]
+                 [conman "0.7.5"]
                  [cprop "0.1.11"]
-                 [luminus-migrations "0.4.3"]
+                 [luminus-migrations "0.4.5"]
                  [mount "0.1.11"]
                  [org.clojure/core.cache "0.6.5"]
                  ;; lein ancient doesn't know I have to add "-dmr" to the verspion
                  [mysql/mysql-connector-java "8.0.8-dmr"]
                  ;; [mysql/mysql-connector-java "6.0.6"]
-                 [org.clojure/clojure "1.9.0-RC1"]
-                 [org.clojure/java.jdbc "0.7.3"]
+                 [org.clojure/clojure "1.9.0"]
+                 [org.clojure/java.jdbc "0.7.5"]
                  [org.clojure/tools.cli "0.3.5"]
                  [org.clojure/tools.logging "0.4.0"]
                  ;; make instrumentation check :ret and :fn too
@@ -24,8 +24,11 @@
                  [ch.qos.logback/logback-core "1.2.3"]
 
                  ;; for Intellij and Cursive
-                 [org.clojure/tools.nrepl "0.2.12"]
+                 [org.clojure/tools.nrepl "0.2.13"]
                  [clojure-complete "0.2.4"]
+
+                 ;; testind infering of specs
+                 [org.clojure/core.typed "0.4.3"]
 
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
