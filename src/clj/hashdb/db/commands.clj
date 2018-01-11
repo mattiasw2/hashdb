@@ -289,6 +289,8 @@
 (s/def ::userid (s/nilable ::uuid-str))
 (s/def ::sessionid (s/nilable ::uuid-str))
 (s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
+(s/def ::index_data (s/or :int? int? :string? string?))
+
 
 
 ;; `::changes` are the set of key-value pairs that are used to update the stored data
@@ -599,15 +601,9 @@
 ;;
 ;;     MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
 
-(s/def
-  :clojure.core.typed.unqualified-keys/index_data
-  (s/or :int? int? :string? string?))
 (s/def :clojure.core.typed.unqualified-keys/k string?)
 
-;; todo: this one is really strange!!!
-;; need to look into it.
-(s/def :clojure.core.typed.unqualified-keys/entity
-  (s/or :kw-0 #{:f} :kw-1 #{:unknown} :string? string?))
+(s/def :clojure.core.typed.unqualified-keys/entity string?)
 
 
 (s/def ::IdEntityIndexDataMap
@@ -616,7 +612,7 @@
    [::id]
    :opt-un
    [:clojure.core.typed.unqualified-keys/entity
-    :clojure.core.typed.unqualified-keys/index_data
+    ::index_data
     :clojure.core.typed.unqualified-keys/k
     ::tenant]))
 
@@ -638,11 +634,12 @@
 
 (s/fdef apply-dbcommands-prevent-deadlock
         :args (s/cat :conn ::ConnectionDatasourceLevelMap
-                     :cmds (s/coll-of (s/tuple ifn? ::IdEntityIndexDataMap)))
+                     :cmds (s/coll-of (s/nilable (s/tuple ifn? ::IdEntityIndexDataMap))))
         :ret   nil?)
 
 (defn apply-dbcommands-prevent-deadlock
-  "Order and than run all index db commands.
+  "Order and than run all index db commands `cmds`.
+   `cmds` is allowed to contain nil, which just will be ignored.
    We order according to primary index, :entity :k :id."
   [conn cmds]
   (let  [sorted (sort
@@ -845,7 +842,7 @@
 
 
 (s/fdef select-by
-        :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
+        :args (s/cat :entity ::entity :k ::k :search ::index_data)
         :ret  (s/* ::stored-latest))
 
 (defn select-by
@@ -871,7 +868,7 @@
 
 
 (s/fdef select-by-global
-        :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
+        :args (s/cat :entity ::entity :k ::k :search ::index_data)
         :ret  (s/* ::stored-latest))
 
 (defn select-by-global
@@ -1156,7 +1153,7 @@
 
 
 (s/fdef verify-these
-        :args (s/cat :ids (s/coll-of :id))
+        :args (s/cat :ids (s/coll-of ::id))
         :ret nil?)
 
 (defn verify-these
