@@ -1,5 +1,5 @@
 -- https://dev.mysql.com/doc/refman/5.6/en/innodb-compression-usage.html
-CREATE TABLE `hashdb_dev`.`latest` (
+CREATE TABLE `latest` (
   `id` VARCHAR(36) NOT NULL,
   `tenant` VARCHAR(36) NOT NULL,
   `entity` VARCHAR(36) NOT NULL,
