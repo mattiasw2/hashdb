@@ -289,6 +289,8 @@
 (s/def ::userid (s/nilable ::uuid-str))
 (s/def ::sessionid (s/nilable ::uuid-str))
 (s/def ::comment (s/nilable (s/and string? #(<= (count %) 999))))
+(s/def ::index_data (s/or :int? int? :string? string?))
+
 
 
 ;; `::changes` are the set of key-value pairs that are used to update the stored data
@@ -457,6 +459,10 @@
                                             changes-relevant))]
             changes-grouped)))
 
+(s/fdef update-indexes-one-type-create!
+        :args (s/cat :before (s/nilable ::data) :typ ::idx-type :changes ::changes
+                     :id ::id :entity ::entity )
+        :ret any?)
 
 (defn- update-indexes-one-type-create!
   "Create index entries for new record `id`."
@@ -467,6 +473,11 @@
     (if v [(select-index typ cmd/create-string-index! cmd/create-long-index!)
            {:id id, :entity (str-edn entity), :k (str-edn k),
             :index_data (select-index typ (str-index v) v)}])))
+
+(s/fdef update-indexes-one-type-update!
+        :args (s/cat :before (s/nilable ::data) :changes ::changes
+                     :typ ::idx-type :id ::id :entity ::entity )
+        :ret any?)
 
 (defn- update-indexes-one-type-update!
   "Update index entries for already existing record `id`."
@@ -521,6 +532,11 @@
 ;; so actually unnecessary to see which exact keywords are indexed,
 ;; just which type of indexes there are. No point deleting int-indexes
 ;; if there are none.
+
+(s/fdef update-indexes-one-type-delete!
+        :args (s/cat :changes ::changes :typ ::idx-type :id ::id)
+        :ret any?)
+
 (defn- update-indexes-one-type-delete!
   "Delete al index entries for record `id`."
   [changes typ id]
@@ -585,8 +601,45 @@
 ;;
 ;;     MySQLTransactionRollbackException Deadlock found when trying to get lock; try restarting transaction  com.mysql.cj.jdbc.exceptions.SQLError.createSQLException (SQLError.java:539)
 
+(s/def :clojure.core.typed.unqualified-keys/k string?)
+
+(s/def :clojure.core.typed.unqualified-keys/entity string?)
+
+
+(s/def ::IdEntityIndexDataMap
+  (s/keys
+   :req-un
+   [::id]
+   :opt-un
+   [:clojure.core.typed.unqualified-keys/entity
+    ::index_data
+    :clojure.core.typed.unqualified-keys/k
+    ::tenant]))
+
+(s/def :clojure.core.typed.unqualified-keys/connection
+  (s/and
+   (partial instance? com.zaxxer.hikari.pool.HikariProxyConnection)))
+(s/def :clojure.core.typed.unqualified-keys/rollback
+  (s/and (partial instance? clojure.lang.IAtom)))
+(s/def :clojure.core.typed.unqualified-keys/datasource
+  (s/and (partial instance? com.zaxxer.hikari.HikariDataSource)))
+(s/def :clojure.core.typed.unqualified-keys/level int?)
+(s/def   ::ConnectionDatasourceLevelMap
+  (s/keys
+   :req-un
+   [:clojure.core.typed.unqualified-keys/connection
+    :clojure.core.typed.unqualified-keys/datasource
+    :clojure.core.typed.unqualified-keys/level
+    :clojure.core.typed.unqualified-keys/rollback]))
+
+(s/fdef apply-dbcommands-prevent-deadlock
+        :args (s/cat :conn ::ConnectionDatasourceLevelMap
+                     :cmds (s/coll-of (s/nilable (s/tuple ifn? ::IdEntityIndexDataMap))))
+        :ret   nil?)
+
 (defn apply-dbcommands-prevent-deadlock
-  "Order and than run all index db commands.
+  "Order and than run all index db commands `cmds`.
+   `cmds` is allowed to contain nil, which just will be ignored.
    We order according to primary index, :entity :k :id."
   [conn cmds]
   (let  [sorted (sort
@@ -789,7 +842,7 @@
 
 
 (s/fdef select-by
-        :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
+        :args (s/cat :entity ::entity :k ::k :search ::index_data)
         :ret  (s/* ::stored-latest))
 
 (defn select-by
@@ -815,7 +868,7 @@
 
 
 (s/fdef select-by-global
-        :args (s/cat :entity ::entity :k ::k :search (s/or :string string? :int int?))
+        :args (s/cat :entity ::entity :k ::k :search ::index_data)
         :ret  (s/* ::stored-latest))
 
 (defn select-by-global
@@ -1099,6 +1152,10 @@
       (zero? (count idxs)))))
 
 
+(s/fdef verify-these
+        :args (s/cat :ids (s/coll-of ::id))
+        :ret nil?)
+
 (defn verify-these
   "Verify these `ids`."
   [ids]
@@ -1118,17 +1175,37 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; some helpers for setting up and create tables
 
+(s/def :clojure.core.typed.unqualified-keys/database-url string?)
+(s/def :clojure.core.typed.unqualified-keys/migration-dir string?)
+(s/def ::DatabaseUrlMigrationDirMap
+  (s/keys
+   :req-un
+   [:clojure.core.typed.unqualified-keys/database-url
+    :clojure.core.typed.unqualified-keys/migration-dir]))
+
+(s/fdef get-config
+        :args (s/cat :env map?)
+        :ret ::DatabaseUrlMigrationDirMap)
+
 (defn get-config
   [env]
   (into {:migration-dir "hashdb_migrations"}
         (select-keys env [:database-url])))
 
 
+(s/fdef clear-database
+        :args (s/cat :env map?)
+        :ret  nil?)
+
 (defn clear-database
   "Clear the database by reconstructing it from scratch."
   [env]
   (migrations/migrate ["reset"] (get-config env)))
 
+
+(s/fdef create-database-tables
+        :args (s/cat :env map?)
+        :ret  nil?)
 
 (defn create-database-tables
   "Create all necessary tables in the database."

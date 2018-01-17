@@ -51,6 +51,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; todo: how to generate datetime in the future
+;; only used for :updated, and not important to test anymore
 
 ;; (s/def ::datetime (dev-with-gen
 ;;                    #(or

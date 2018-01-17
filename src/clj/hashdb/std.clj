@@ -8,7 +8,9 @@
 (defn substring+
   [str start end]
   (let [len (count str)
+        start (max 0 start)
         start (min start len)
+        end (max 0 end)
         end (min end len)]
     (.substring str start end)))
 
