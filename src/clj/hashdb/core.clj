@@ -21,6 +21,8 @@
                         (parse-opts cli-options)
                         mount/start-with-args
                         :started)]
+    ;; for nanobox experiments, create db tables unless already done
+    (migrations/migrate ["migrate"] (select-keys env [:database-url :migration-dir]))
     (log/info component "started"))
   (.addShutdownHook (Runtime/getRuntime) (Thread. stop-app)))
 
@@ -29,12 +31,12 @@
     (some #{"init"} args)
     (do
       (mount/start #'hashdb.config/env)
-      (migrations/init (select-keys env [:database-url :init-script]))
-      (System/exit 0))
+      (migrations/init (select-keys env [:database-url :init-script :migration-dir]))
+      #_(System/exit 0))
     (some #{"migrate" "rollback"} args)
     (do
       (mount/start #'hashdb.config/env)
-      (migrations/migrate args (select-keys env [:database-url]))
-      (System/exit 0))
+      (migrations/migrate args (select-keys env [:database-url :migration-dir]))
+      #_(System/exit 0))
     :else
     (start-app args)))
