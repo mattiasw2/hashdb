@@ -917,7 +917,7 @@
   "Return the single row of type `entity` where `k` is exactly
    the string `search` regardless of tenant, or nil if not found."
   [entity k search]
-  (let [res (select-by entity k search)
+  (let [res (select-by-global entity k search)
         ;; optimization: count will load all, but I only need 2 to see if a problem
         cnt (count res)]
     (case cnt
