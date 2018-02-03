@@ -8,6 +8,8 @@
    [hashdb.std :refer :all]
    [clj-time.core :as t]
    [clojure.core.cache :as cache]
+   [clojure.spec.gen.alpha :as gen]
+   [com.gfredericks.test.chuck.generators :as gen']
    [luminus-migrations.core :as migrations])
   ;; remove the warning that we define a function called get
   (:refer-clojure :exclude [get])
@@ -269,10 +271,12 @@
 ;;
 
 (s/def ::datetime
-  #(or
-    ;; mysql select returns joda-time
-    (instance? org.joda.time.DateTime %)
-    (instance? java.util.Date %)))
+  (s/with-gen
+    #(or
+      ;; mysql select returns joda-time
+      (instance? org.joda.time.DateTime %)
+      (instance? java.util.Date %))
+    #(gen'/datetime)))
 
 
 (s/def ::id ::uuid-str)
