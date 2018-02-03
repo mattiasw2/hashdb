@@ -793,7 +793,7 @@
         :ret (s/nilable ::stored-latest))
 
 (defn try-get
-  "Return map at `id`, null if not found."
+  "Return row at `id`, nil if not found."
   [id]
   (try-get-internal id (cmd/get-latest {:id id})))
 
@@ -803,7 +803,7 @@
         :ret ::stored-latest)
 
 (defn get
-  "Return map at `id`, exception if not found."
+  "Return row at `id`, exception if not found."
   [id]
   (let [m (try-get id)]
     (if m m (throw (ex-info (str "Row with id '" id "' missing!")
@@ -894,6 +894,64 @@
                    (fn [_] true))]
     (filter filterp (map extract-row res))))
 
+
+(defn try-get-by
+  "Return the single row of type `entity` where `k` is exactly
+   the string `search`, or nil if not found."
+  [entity k search]
+  (let [res (select-by entity k search)
+        ;; optimization: count will load all, but I only need 2 to see if a problem
+        cnt (count res)]
+    (assert (< cnt 2) "try-get-by should only return 0 or 1 hits")
+    (case cnt
+      0 nil
+      1 (first res)
+      (throw (ex-info "try-get-by should only return 0 or 1 hits"
+                      {:tenant (get-tenant)
+                       :entity entity
+                       :k k
+                       :search search})))))
+
+
+(defn try-get-by-global
+  "Return the single row of type `entity` where `k` is exactly
+   the string `search` regardless of tenant, or nil if not found."
+  [entity k search]
+  (let [res (select-by entity k search)
+        ;; optimization: count will load all, but I only need 2 to see if a problem
+        cnt (count res)]
+    (case cnt
+      0 nil
+      1 (first res)
+      (throw (ex-info "try-get-by-global should only return 0 or 1 hits"
+                      {:entity entity
+                       :k k
+                       :search search})))))
+
+(defn get-by
+  "Return the single row of type `entity` where `k` is exactly
+   the string `search`, or nil if not found.
+   Exception if not found."
+  [entity k search]
+  (let [m (try-get-by entity k search)]
+    (if m m (throw (ex-info "get-by should only return exactly 1 hit."
+                            {:tenant (get-tenant)
+                             :entity entity
+                             :k k
+                             :search search})))))
+
+
+(defn get-by-global
+  "Return the single row of type `entity` where `k` is exactly
+   the string `search`, or nil if not found.
+   Exception if not found.
+   Regardless of tenant"
+  [entity k search]
+  (let [m (try-get-by-global entity k search)]
+    (if m m (throw (ex-info "get-by-global should only return exactly 1 hit."
+                            {:entity entity
+                             :k k
+                             :search search})))))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

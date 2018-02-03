@@ -1,4 +1,4 @@
-(defproject org.clojars.mattiasw/hashdb "0.1.5-SNAPSHOT"
+(defproject org.clojars.mattiasw/hashdb "0.1.6"
 
   :description "HASHDB: A simple way of storing clojure maps into mySQL."
   :url "https://github.com/mattiasw2/hashdb"
@@ -6,10 +6,10 @@
   :dependencies [[clj-time "0.14.2"]
                  [conman "0.7.5"]
                  [cprop "0.1.11"]
-                 [luminus-migrations "0.4.5"]
+                 [luminus-migrations "0.5.0"]
                  [mount "0.1.11"]
                  [org.clojure/core.cache "0.6.5"]
-                 ;; lein ancient doesn't know I have to add "-dmr" to the verspion
+                 ;; lein ancient doesn't know I have to add "-dmr" to the version
                  [mysql/mysql-connector-java "8.0.8-dmr"]
                  ;; [mysql/mysql-connector-java "6.0.6"]
                  [org.clojure/clojure "1.9.0"]
@@ -29,6 +29,9 @@
 
                  ;; testind infering of specs
                  [org.clojure/core.typed "0.4.3"]
+
+                 [com.gfredericks/test.chuck "0.2.8"]
+
 
                  ;; needed for (hashdb.db.commands-test/test-many-n 10)
                  [org.clojure/test.check "0.10.0-alpha2"]]
