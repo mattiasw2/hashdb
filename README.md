@@ -128,6 +128,10 @@ Use `utf8mb4` and not `utf8`, see [How to support full Unicode in MySQL database
 
  * Make a clojar
  * Add LIKE lookups for strings
+ 
+## Testing
+
+ * Test using Jepson: https://github.com/jepsen-io/jepsen/blob/master/doc/tutorial/03-client.md
 
 ## Performance
 
